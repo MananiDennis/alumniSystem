@@ -1,0 +1,18 @@
+__pycache__/
+.kiro
+.pytest_cache/
+tests/
+.env
+frontend/node_modules
+.idea
+
+# Docker files
+Dockerfile
+docker-compose.yml
+frontend/Dockerfile
+
+# Database files
+*.db
+*.sqlite
+*.sqlite3
+alumni_tracking.db
