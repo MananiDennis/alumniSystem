@@ -2,7 +2,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, Session
 from sqlalchemy.pool import StaticPool
 from src.database.models import Base
-from src.config.settings import settings
+from src.config.settings import settings, get_database_url
 from src.models.user import User, UserRole
 from datetime import datetime
 import os
@@ -18,17 +18,45 @@ class DatabaseManager:
     
     def setup_database(self):
         """Set up database engine and session factory"""
-        # Use SQLite for development (easier setup)
-        database_path = "alumni_tracking.db"
-        database_url = f"sqlite:///{database_path}"
+        # Use database URL from settings (supports MySQL, PostgreSQL, SQLite)
+        database_url = get_database_url()
         
-        # Create engine with connection pooling for SQLite
-        self.engine = create_engine(
-            database_url,
-            poolclass=StaticPool,
-            connect_args={"check_same_thread": False},
-            echo=settings.debug  # Log SQL queries in debug mode
-        )
+        # Create engine with appropriate configuration
+        if database_url.startswith("sqlite"):
+            # SQLite specific configuration
+            self.engine = create_engine(
+                database_url,
+                poolclass=StaticPool,
+                connect_args={"check_same_thread": False},
+                echo=settings.debug  # Log SQL queries in debug mode
+            )
+        elif database_url.startswith("mysql"):
+            # MySQL specific configuration with SSL
+            connect_args = {}
+            if settings.database_ssl_ca and os.path.exists(settings.database_ssl_ca):
+                connect_args = {
+                    "ssl": {
+                        "ca": settings.database_ssl_ca,
+                        "check_hostname": True
+                    }
+                }
+            else:
+                # For Aiven Cloud or other managed MySQL services
+                connect_args = {"ssl": {"check_hostname": False}}
+            
+            self.engine = create_engine(
+                database_url,
+                connect_args=connect_args,
+                pool_pre_ping=True,  # Verify connections before use
+                echo=settings.debug  # Log SQL queries in debug mode
+            )
+        else:
+            # PostgreSQL or other database configuration
+            self.engine = create_engine(
+                database_url,
+                pool_pre_ping=True,  # Verify connections before use
+                echo=settings.debug  # Log SQL queries in debug mode
+            )
         
         # Create session factory
         self.SessionLocal = sessionmaker(

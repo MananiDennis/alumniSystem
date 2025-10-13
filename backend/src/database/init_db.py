@@ -6,7 +6,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from src.database.models import Base
 from src.models.user import User, UserRole
-from src.config.settings import settings
+from src.config.settings import settings, get_database_url
 import logging
 
 logging.basicConfig(level=logging.INFO)
@@ -16,8 +16,8 @@ def init_database():
     """Initialize database with tables and initial data"""
     try:
         # Use the same database setup as the main application
-        database_url = "sqlite:///alumni_tracking.db"
-        engine = create_engine(database_url, connect_args={"check_same_thread": False})
+        database_url = get_database_url()
+        engine = create_engine(database_url, connect_args={"check_same_thread": False} if database_url.startswith("sqlite") else {})
         
         # Create all tables
         Base.metadata.create_all(bind=engine)

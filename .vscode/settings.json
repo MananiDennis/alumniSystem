@@ -1,3 +1,4 @@
 {
-    "sarif-viewer.connectToGithubCodeScanning": "off"
+    "sarif-viewer.connectToGithubCodeScanning": "off",
+    "markdown-preview-enhanced.plantumlJarPath": "C:\\Users\\manan\\Downloads\\plantuml-1.2025.8.jar"
 }
