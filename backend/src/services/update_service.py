@@ -3,8 +3,8 @@ from datetime import datetime, timedelta
 from src.models.alumni import AlumniProfile
 from src.database.repository import AlumniRepository
 from src.database.connection import db_manager
-from src.services.brightdata_service import BrightDataService
-from src.services.brightdata_parser import BrightDataParser
+from src.services.web_research_service import WebResearchService
+from src.services.ai_verification import AIVerificationService
 
 
 class UpdateService:
@@ -13,8 +13,8 @@ class UpdateService:
     def __init__(self):
         self.session = db_manager.get_session()
         self.repository = AlumniRepository(self.session)
-        self.brightdata = BrightDataService()
-        self.parser = BrightDataParser()
+        self.web_research = WebResearchService()
+        self.ai_verification = AIVerificationService()
     
     def update_all_profiles(self, max_age_days: int = 30) -> List[AlumniProfile]:
         """Update all profiles older than specified days"""
@@ -53,15 +53,14 @@ class UpdateService:
     def update_single_profile(self, profile: AlumniProfile) -> Optional[AlumniProfile]:
         """Update a single alumni profile"""
         try:
-            # Get fresh data from BrightData
-            fresh_profiles = self.brightdata.get_alumni_profiles([profile.full_name])
+            # Get fresh data from web research
+            web_results = self.web_research.search_person_web(profile.full_name)
             
-            if not fresh_profiles:
+            if not web_results:
                 return None
             
-            # Parse the fresh data
-            fresh_data = fresh_profiles[0]
-            fresh_profile = self.parser.parse_profile(fresh_data)
+            # Convert web data to structured profile using AI
+            fresh_profile = self.ai_verification.convert_web_data_to_profile(profile.full_name, web_results)
             
             if not fresh_profile:
                 return None

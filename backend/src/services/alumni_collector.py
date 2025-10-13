@@ -7,8 +7,8 @@ from datetime import datetime, date
 from src.models.alumni import AlumniProfile, JobPosition, DataSource
 from src.database.connection import db_manager
 from src.database.repository import AlumniRepository
-from src.services.brightdata_service import BrightDataService
-from src.services.brightdata_parser import BrightDataParser
+# from src.services.brightdata_service import BrightDataService
+# from src.services.brightdata_parser import BrightDataParser
 from src.services.ai_verification import AIVerificationService
 from src.config.settings import settings
 
@@ -22,14 +22,14 @@ class AlumniCollector:
         
         self.logger = logging.getLogger(__name__)
         
-        # Initialize BrightData service with error handling
-        try:
-            self.brightdata = BrightDataService()
-            self.parser = BrightDataParser()
-        except Exception as e:
-            self.logger.warning(f"BrightData service initialization failed: {e}")
-            self.brightdata = None
-            self.parser = None
+        # Initialize services with error handling
+        # try:
+        #     self.brightdata = BrightDataService()
+        #     self.parser = BrightDataParser()
+        # except Exception as e:
+        #     self.logger.warning(f"BrightData service initialization failed: {e}")
+        #     self.brightdata = None
+        #     self.parser = None
             
         self.ai_service = AIVerificationService() if settings.openai_api_key else None
         
@@ -42,63 +42,65 @@ class AlumniCollector:
         """Main collection method - uses web research by default"""
         if method == "manual":
             return self.collect_data_manually(names)
-        elif method == "brightdata":
-            return self.collect_automated(names)
+        # elif method == "brightdata":
+        #     return self.collect_automated(names)
         elif method == "web-research":
             return self.collect_web_research(names)
+        # else:
+        #     return self.collect_linkedin_official(names)
         else:
-            return self.collect_linkedin_official(names)
+            return self.collect_web_research(names)  # Default fallback
 
-    def collect_linkedin_official(self, names: List[str]) -> List[AlumniProfile]:
-        """Collect alumni using LinkedIn official API (simple wrapper)"""
-        from src.services.linkedin_official_api import LinkedInOfficialAPI
-        linkedin_api = LinkedInOfficialAPI()
-        return linkedin_api.collect_alumni_official(names)
+    # def collect_linkedin_official(self, names: List[str]) -> List[AlumniProfile]:
+    #     """Collect alumni using LinkedIn official API (simple wrapper)"""
+    #     from src.services.linkedin_official_api import LinkedInOfficialAPI
+    #     linkedin_api = LinkedInOfficialAPI()
+    #     return linkedin_api.collect_alumni_official(names)
     
-    def collect_automated(self, names: List[str]) -> List[AlumniProfile]:
-        """Automated collection using BrightData + AI verification"""
-        self.logger.info(f"Starting automated collection for {len(names)} alumni")
-        
-        if not self.brightdata:
-            self.logger.warning("BrightData service not available, creating placeholder profiles")
-            return self.create_placeholder_profiles(names)
-        
-        try:
-            linkedin_profiles = self.brightdata.get_alumni_profiles(names, ecu_filter=True)
-        except Exception as e:
-            self.logger.error(f"BrightData collection failed: {e}")
-            return self.create_placeholder_profiles(names)
-        collected_profiles = []
-        
-        for profile_data in linkedin_profiles:
-            try:
-                alumni_profile = self.parser.parse_profile(profile_data)
-                if not alumni_profile:
-                    continue
-                
-                # AI verification if available
-                if self.ai_service:
-                    verification = self.ai_service.verify_profile_match(
-                        target_name=alumni_profile.full_name,
-                        scraped_data=profile_data
-                    )
-                    
-                    if verification.is_match:
-                        alumni_profile.confidence_score *= verification.confidence_score
-                    else:
-                        self.logger.warning(f"AI verification failed for {alumni_profile.full_name}")
-                        continue
-                
-                saved_profile = self.repository.create_alumni(alumni_profile)
-                collected_profiles.append(saved_profile)
-                
-                self.logger.info(f"✓ Saved {alumni_profile.full_name}")
-                
-            except Exception as e:
-                self.logger.error(f"Error processing profile: {e}")
-                continue
-        
-        return collected_profiles
+    # def collect_automated(self, names: List[str]) -> List[AlumniProfile]:
+    #     """Automated collection using BrightData + AI verification"""
+    #     self.logger.info(f"Starting automated collection for {len(names)} alumni")
+    #     
+    #     if not self.brightdata:
+    #         self.logger.warning("BrightData service not available, creating placeholder profiles")
+    #         return self.create_placeholder_profiles(names)
+    #     
+    #     try:
+    #         linkedin_profiles = self.brightdata.get_alumni_profiles(names, ecu_filter=True)
+    #     except Exception as e:
+    #         self.logger.error(f"BrightData collection failed: {e}")
+    #         return self.create_placeholder_profiles(names)
+    #     collected_profiles = []
+    #     
+    #     for profile_data in linkedin_profiles:
+    #         try:
+    #             alumni_profile = self.parser.parse_profile(profile_data)
+    #             if not alumni_profile:
+    #                 continue
+    #             
+    #             # AI verification if available
+    #             if self.ai_service:
+    #             verification = self.ai_service.verify_profile_match(
+    #                 target_name=alumni_profile.full_name,
+    #                 scraped_data=profile_data
+    #             )
+    #             
+    #             if verification.is_match:
+    #                 alumni_profile.confidence_score *= verification.confidence_score
+    #             else:
+    #                 self.logger.warning(f"AI verification failed for {alumni_profile.full_name}")
+    #                 continue
+    #         
+    #         saved_profile = self.repository.create_alumni(alumni_profile)
+    #         collected_profiles.append(saved_profile)
+    #         
+    #         self.logger.info(f"✓ Saved {alumni_profile.full_name}")
+    #         
+    #     except Exception as e:
+    #         self.logger.error(f"Error processing profile: {e}")
+    #         continue
+    # 
+    #     return collected_profiles
     
     def collect_web_research(self, names: List[str]) -> List[AlumniProfile]:
         """Collect alumni data using web research + AI structuring"""

@@ -36,11 +36,6 @@ task_store: Dict[str, Dict[str, Any]] = {}
 task_lock = Lock()
 
 app = FastAPI(title="Alumni Tracking API", version="1.0.0")
-
-# NOTE: Prefer launching the app using `backend/main.py` which sets up
-# `backend/src` on the import path and runs uvicorn. This avoids import
-# issues when running from the repo root or in some deployment setups.
-
 # CORS for frontend
 app.add_middleware(
     CORSMiddleware,
@@ -89,7 +84,7 @@ def verify_token(credentials: HTTPAuthorizationCredentials = Depends(security)) 
         return email
     except jwt.ExpiredSignatureError:
         raise HTTPException(status_code=401, detail="Token expired")
-    except jwt.JWTError:
+    except jwt.PyJWTError:
         raise HTTPException(status_code=401, detail="Invalid token")
 
 

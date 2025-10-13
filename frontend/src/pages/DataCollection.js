@@ -275,7 +275,7 @@ export default function DataCollection({ token }) {
         names: validNames,
         status: "running",
         timestamp: new Date().toLocaleString(),
-        method: useWebResearch ? "Web Research" : "BrightData",
+        method: "Web Research",
       };
       setTasks([newTask, ...tasks]);
 
@@ -426,7 +426,7 @@ export default function DataCollection({ token }) {
 
                 <Typography variant="body2" sx={{ color: "#64748b", mb: 3 }}>
                   Enter alumni names to collect their professional information
-                  from LinkedIn and other sources.
+                  from web research and public sources.
                 </Typography>
 
                 <Box sx={{ mb: 3 }}>
@@ -518,8 +518,8 @@ export default function DataCollection({ token }) {
                     variant="caption"
                     sx={{ color: "#64748b", display: "block", mt: 1 }}
                   >
-                    When disabled, uses BrightData LinkedIn scraping (faster but
-                    requires API key)
+                    Web research uses AI to analyze public web results for
+                    comprehensive data collection
                   </Typography>
                 </Box>
 
@@ -594,13 +594,6 @@ export default function DataCollection({ token }) {
                               {task.method === "Web Research" && (
                                 <Chip
                                   label="Web Research"
-                                  size="small"
-                                  sx={{ ml: 1, height: 20 }}
-                                />
-                              )}
-                              {task.method === "BrightData" && (
-                                <Chip
-                                  label="BrightData"
                                   size="small"
                                   sx={{ ml: 1, height: 20 }}
                                 />

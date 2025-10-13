@@ -19,18 +19,18 @@ class Settings(BaseSettings):
     openai_api_key: Optional[str] = None
 
     # BrightData API settings
-    brightdata_api_key: Optional[str] = None
-    brightdata_dataset_id: Optional[str] = None
+    # brightdata_api_key: Optional[str] = None
+    # brightdata_dataset_id: Optional[str] = None
 
     # LinkedIn scraping settings (fallback)
-    linkedin_rate_limit: int = 50  # profiles per hour
-    linkedin_delay_min: int = 2    # minimum seconds between requests
-    linkedin_delay_max: int = 5    # maximum seconds between requests
+    # linkedin_rate_limit: int = 50  # profiles per hour
+    # linkedin_delay_min: int = 2    # minimum seconds between requests
+    # linkedin_delay_max: int = 5    # maximum seconds between requests
 
     # LinkedIn Official API settings
-    linkedin_client_id: Optional[str] = None
-    linkedin_client_secret: Optional[str] = None
-    linkedin_access_token: Optional[str] = None
+    # linkedin_client_id: Optional[str] = None
+    # linkedin_client_secret: Optional[str] = None
+    # linkedin_access_token: Optional[str] = None
 
     # Redis settings for Celery
     redis_url: str = "redis://localhost:6379/0"

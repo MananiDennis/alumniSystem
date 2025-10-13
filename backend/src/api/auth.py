@@ -42,7 +42,7 @@ def verify_token(credentials: HTTPAuthorizationCredentials = Depends(security)) 
         return email
     except jwt.ExpiredSignatureError:
         raise HTTPException(status_code=401, detail="Token expired")
-    except jwt.JWTError:
+    except jwt.PyJWTError:
         raise HTTPException(status_code=401, detail="Invalid token")
 
 @router.post("/login", response_model=TokenResponse)
