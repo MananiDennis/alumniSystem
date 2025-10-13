@@ -20,6 +20,16 @@ from src.models.user import User
 from src.database.connection import db_manager
 from src.config.settings import settings
 
+# Import modular routers
+from src.api import auth as auth_router
+from src.api import alumni as alumni_router
+from src.api import collection as collection_router
+from src.api import upload as upload_router
+from src.api import query as query_router
+from src.api import stats as stats_router
+from src.api import export as export_router
+from src.api import health as health_router
+
 
 # Task management for background collection
 task_store: Dict[str, Dict[str, Any]] = {}
@@ -27,10 +37,18 @@ task_lock = Lock()
 
 app = FastAPI(title="Alumni Tracking API", version="1.0.0")
 
+# NOTE: Prefer launching the app using `backend/main.py` which sets up
+# `backend/src` on the import path and runs uvicorn. This avoids import
+# issues when running from the repo root or in some deployment setups.
+
 # CORS for frontend
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
+    allow_origins=[
+        "http://localhost:3000", 
+        "http://127.0.0.1:3000",
+        "https://alumni-system-nu.vercel.app"
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -80,6 +98,17 @@ def verify_token(credentials: HTTPAuthorizationCredentials = Depends(security)) 
 def home():
     """API welcome message"""
     return {"message": "Alumni Tracking System API", "version": "1.0.0"}
+
+
+# Include modular routers
+app.include_router(auth_router.router)
+app.include_router(alumni_router.router)
+app.include_router(collection_router.router)
+app.include_router(upload_router.router)
+app.include_router(query_router.router)
+app.include_router(stats_router.router)
+app.include_router(export_router.router)
+app.include_router(health_router.router)
 
 
 @app.get("/health")
@@ -770,6 +799,6 @@ def format_alumni(alumni) -> dict:
         "last_updated": alumni.last_updated.isoformat() if hasattr(alumni, 'last_updated') and alumni.last_updated else getattr(alumni, 'last_updated', None)
     }
 
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    # NOTE: Application is launched via `backend/main.py`.
+    # The previous `if __name__ == '__main__'` block was removed to avoid
+    # accidentally starting the server when this module is imported.

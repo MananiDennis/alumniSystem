@@ -16,7 +16,7 @@ USERS = {
 }
 
 class LoginRequest(BaseModel):
-    username: str
+    email: str
     password: str
 
 class TokenResponse(BaseModel):

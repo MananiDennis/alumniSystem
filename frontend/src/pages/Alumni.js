@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import {
   Box,
   Card,
@@ -10,7 +10,6 @@ import {
   TableContainer,
   TableHead,
   TableRow,
-  Paper,
   Chip,
   TextField,
   Button,
@@ -43,19 +42,18 @@ import {
   LocationOn,
   School,
   CalendarToday,
-  Edit,
   Add,
   Delete,
   DeleteForever,
 } from "@mui/icons-material";
 import axios from "axios";
+import { api } from "../utils/api";
 
 export default function Alumni({ token }) {
   const [alumni, setAlumni] = useState([]);
   const [filteredAlumni, setFilteredAlumni] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
-  const [selectedAlumni, setSelectedAlumni] = useState(null);
   const [detailedViewOpen, setDetailedViewOpen] = useState(false);
   const [detailedAlumni, setDetailedAlumni] = useState(null);
   const [detailedLoading, setDetailedLoading] = useState(false);
@@ -84,9 +82,23 @@ export default function Alumni({ token }) {
     education: [],
   });
 
+  const fetchAlumni = useCallback(async () => {
+    try {
+      const response = await axios.get(api.endpoints.alumni, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      setAlumni(response.data.alumni);
+      setFilteredAlumni(response.data.alumni);
+    } catch (error) {
+      // Error handled silently
+    } finally {
+      setLoading(false);
+    }
+  }, [token]);
+
   useEffect(() => {
     fetchAlumni();
-  }, []);
+  }, [fetchAlumni]);
 
   useEffect(() => {
     // Filter alumni based on search term
@@ -112,29 +124,12 @@ export default function Alumni({ token }) {
     }
   }, [searchTerm, alumni]);
 
-  const fetchAlumni = async () => {
-    try {
-      const response = await axios.get("http://localhost:8000/alumni", {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      setAlumni(response.data.alumni);
-      setFilteredAlumni(response.data.alumni);
-    } catch (error) {
-      // Error handled silently
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const fetchDetailedAlumni = async (alumniId) => {
     setDetailedLoading(true);
     try {
-      const response = await axios.get(
-        `http://localhost:8000/alumni/${alumniId}`,
-        {
-          headers: { Authorization: `Bearer ${token}` },
-        }
-      );
+      const response = await axios.get(`${api.endpoints.alumni}/${alumniId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
       setDetailedAlumni(response.data);
       setDetailedViewOpen(true);
     } catch (error) {
@@ -145,14 +140,12 @@ export default function Alumni({ token }) {
   };
 
   const handleViewDetails = (alumni) => {
-    setSelectedAlumni(alumni);
     fetchDetailedAlumni(alumni.id);
   };
 
   const handleCloseDetailedView = () => {
     setDetailedViewOpen(false);
     setDetailedAlumni(null);
-    setSelectedAlumni(null);
   };
 
   const handleEditAlumni = async (alumni) => {
@@ -160,12 +153,9 @@ export default function Alumni({ token }) {
 
     try {
       // Fetch detailed alumni data to get work history and education
-      const response = await axios.get(
-        `http://localhost:8000/alumni/${alumni.id}`,
-        {
-          headers: { Authorization: `Bearer ${token}` },
-        }
-      );
+      const response = await axios.get(`${api.endpoints.alumni}/${alumni.id}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
       const detailedData = response.data;
 
       // Pre-populate form with existing data
@@ -304,7 +294,7 @@ export default function Alumni({ token }) {
       };
 
       await axios.put(
-        `http://localhost:8000/alumni/${editingAlumni.id}`,
+        `${api.endpoints.alumni}/${editingAlumni.id}`,
         submitData,
         {
           headers: { Authorization: `Bearer ${token}` },
@@ -363,7 +353,7 @@ export default function Alumni({ token }) {
 
     setDeleteLoading(true);
     try {
-      await axios.delete(`http://localhost:8000/alumni/${deletingAlumni.id}`, {
+      await axios.delete(`${api.endpoints.alumni}/${deletingAlumni.id}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
 
@@ -561,7 +551,7 @@ export default function Alumni({ token }) {
                         >
                           View Details
                         </Button>
-                        <Button
+                        {/* <Button
                           size="small"
                           variant="outlined"
                           onClick={() => handleDeleteAlumni(alumni)}
@@ -577,7 +567,7 @@ export default function Alumni({ token }) {
                           }}
                         >
                           Delete
-                        </Button>
+                        </Button> */}
                         {alumni.linkedin_url && (
                           <Button
                             size="small"

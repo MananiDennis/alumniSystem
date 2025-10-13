@@ -8,7 +8,6 @@ import {
   Button,
   Chip,
   Alert,
-  LinearProgress,
   Switch,
   FormControlLabel,
   Grid,
@@ -41,6 +40,7 @@ import {
   Description,
 } from "@mui/icons-material";
 import axios from "axios";
+import { api } from "../utils/api";
 
 const TaskStatusChip = ({ status }) => {
   const getStatusProps = (status) => {
@@ -222,16 +222,12 @@ export default function DataCollection({ token }) {
       formData.append("file", selectedFile);
       // Don't send auto_collect parameter, it defaults to false
 
-      const response = await axios.post(
-        "http://localhost:8000/upload-names",
-        formData,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "multipart/form-data",
-          },
-        }
-      );
+      const response = await axios.post(api.endpoints.uploadNames, formData, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "multipart/form-data",
+        },
+      });
 
       const extractedNames = response.data.names;
       // Replace existing names with imported ones
@@ -263,7 +259,7 @@ export default function DataCollection({ token }) {
 
     try {
       const response = await axios.post(
-        "http://localhost:8000/collect",
+        api.endpoints.collect,
         {
           names: validNames,
           use_web_research: useWebResearch,
@@ -298,7 +294,7 @@ export default function DataCollection({ token }) {
   const pollTaskStatus = async (taskId) => {
     try {
       const response = await axios.get(
-        `http://localhost:8000/collect/status/${taskId}`,
+        `${api.endpoints.collect}/status/${taskId}`,
         { headers: { Authorization: `Bearer ${token}` } }
       );
 
@@ -366,7 +362,7 @@ export default function DataCollection({ token }) {
         education: formattedEducation,
       };
 
-      await axios.post("http://localhost:8000/manual-collect", submitData, {
+      await axios.post(api.endpoints.manualCollect, submitData, {
         headers: { Authorization: `Bearer ${token}` },
       });
 

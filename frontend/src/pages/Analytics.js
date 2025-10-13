@@ -33,7 +33,6 @@ import {
   Search,
   Psychology,
   Close,
-  Person,
   LinkedIn,
   Work,
   Business,
@@ -41,14 +40,15 @@ import {
   School,
   CalendarToday,
 } from "@mui/icons-material";
+
 import axios from "axios";
+import { api } from "../utils/api";
 
 export default function Analytics({ token }) {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [selectedAlumni, setSelectedAlumni] = useState(null);
   const [detailedViewOpen, setDetailedViewOpen] = useState(false);
   const [detailedAlumni, setDetailedAlumni] = useState(null);
   const [detailedLoading, setDetailedLoading] = useState(false);
@@ -61,7 +61,7 @@ export default function Analytics({ token }) {
 
     try {
       const response = await axios.post(
-        "http://localhost:8000/query",
+        api.endpoints.query,
         { query },
         { headers: { Authorization: `Bearer ${token}` } }
       );
@@ -76,12 +76,9 @@ export default function Analytics({ token }) {
   const fetchDetailedAlumni = async (alumniId) => {
     setDetailedLoading(true);
     try {
-      const response = await axios.get(
-        `http://localhost:8000/alumni/${alumniId}`,
-        {
-          headers: { Authorization: `Bearer ${token}` },
-        }
-      );
+      const response = await axios.get(`${api.endpoints.alumni}/${alumniId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
       setDetailedAlumni(response.data);
       setDetailedViewOpen(true);
     } catch (error) {
@@ -92,14 +89,12 @@ export default function Analytics({ token }) {
   };
 
   const handleViewDetails = (alumni) => {
-    setSelectedAlumni(alumni);
     fetchDetailedAlumni(alumni.id);
   };
 
   const handleCloseDetailedView = () => {
     setDetailedViewOpen(false);
     setDetailedAlumni(null);
-    setSelectedAlumni(null);
   };
 
   const getConfidenceColor = (score) => {

@@ -40,7 +40,7 @@ const Layout = ({ children, user, onLogout, currentPage, onPageChange }) => {
   const drawer = (
     <Box
       sx={{
-        background: "linear-gradient(180deg, #667eea 0%, #764ba2 100%)",
+        background: "linear-gradient(180deg, #1a1a1a 0%, #2d2d2d 100%)",
         height: "100%",
         color: "white",
       }}
@@ -109,7 +109,7 @@ const Layout = ({ children, user, onLogout, currentPage, onPageChange }) => {
         position="fixed"
         sx={{
           zIndex: 1201,
-          background: "linear-gradient(90deg, #667eea 0%, #764ba2 100%)",
+          background: "linear-gradient(90deg, #1a1a1a 0%, #2d2d2d 100%)",
           width: desktopOpen ? { sm: `calc(100% - 240px)` } : "100%",
           ml: desktopOpen ? { sm: "240px" } : 0,
           transition: "width 0.3s ease, margin-left 0.3s ease",
@@ -136,7 +136,7 @@ const Layout = ({ children, user, onLogout, currentPage, onPageChange }) => {
           </Typography>
 
           <Avatar
-            sx={{ cursor: "pointer", bgcolor: "rgba(255,255,255,0.2)" }}
+            sx={{ cursor: "pointer", bgcolor: "rgba(255,255,255,0.15)" }}
             onClick={(e) => setAnchorEl(e.currentTarget)}
           >
             {user?.email?.[0]?.toUpperCase() ||
