@@ -23,3 +23,5 @@ python-dotenv
 python-multipart
 PyJWT
 pytz
+psycopg2
+pymysql
