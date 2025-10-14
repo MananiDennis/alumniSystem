@@ -3,11 +3,42 @@ from bs4 import BeautifulSoup
 from typing import List, Dict, Any
 import time
 import logging
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 
 logger = logging.getLogger(__name__)
 
 class WebResearchService:
     """Simple web research service using common search tools"""
+    
+    def __init__(self):
+        self.session = self._create_session_with_retry()
+    
+    def _create_session_with_retry(self):
+        """Create a requests session with retry logic and proper headers"""
+        session = requests.Session()
+        
+        # Configure retry strategy
+        retry = Retry(
+            total=3,
+            backoff_factor=1,
+            status_forcelist=[429, 500, 502, 503, 504],
+        )
+        adapter = HTTPAdapter(max_retries=retry)
+        session.mount('http://', adapter)
+        session.mount('https://', adapter)
+        
+        # Add browser-like headers to avoid blocking
+        session.headers.update({
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+            'Accept-Language': 'en-US,en;q=0.5',
+            'Accept-Encoding': 'gzip, deflate',
+            'Connection': 'keep-alive',
+            'Upgrade-Insecure-Requests': '1',
+        })
+        
+        return session
     
     def search_person_web(self, name: str, additional_info: str = "") -> List[Dict[str, Any]]:
         """Search for person information on the web"""
@@ -30,7 +61,7 @@ class WebResearchService:
                 search_results = self.duckduckgo_search(query)
                 logger.info(f"Query '{query}' returned {len(search_results)} results")
                 results.extend(search_results)
-                time.sleep(1)  # Be respectful
+                time.sleep(2)  # Increased delay to be more respectful
             except Exception as e:
                 logger.error(f"Search error for {query}: {e}")
                 continue
@@ -45,13 +76,14 @@ class WebResearchService:
             # Use DuckDuckGo search URL
             url = "https://duckduckgo.com/html/"
             params = {"q": query}
-            headers = {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-            }
             
             logger.debug(f"Making request to {url} with params {params}")
-            response = requests.get(url, params=params, headers=headers, timeout=10)
+            response = self.session.get(url, params=params, timeout=15)  # Increased timeout
             logger.debug(f"Response status: {response.status_code}")
+            
+            if response.status_code != 200:
+                logger.warning(f"DuckDuckGo returned status {response.status_code}")
+                return []
             
             soup = BeautifulSoup(response.content, 'html.parser')
             
@@ -90,6 +122,12 @@ class WebResearchService:
             logger.info(f"DuckDuckGo search completed, found {len(results)} results")
             return results
             
+        except requests.exceptions.Timeout:
+            logger.error(f"DuckDuckGo search timeout for query: {query}")
+            return []
+        except requests.exceptions.ConnectionError:
+            logger.error(f"DuckDuckGo connection error for query: {query}")
+            return []
         except Exception as e:
             logger.error(f"DuckDuckGo search error: {e}")
             return []
@@ -97,11 +135,9 @@ class WebResearchService:
     def extract_professional_info(self, url: str) -> Dict[str, Any]:
         """Extract professional information from a webpage"""
         try:
-            headers = {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-            }
+            response = self.session.get(url, timeout=15)  # Use session and increased timeout
+            response.raise_for_status()
             
-            response = requests.get(url, headers=headers, timeout=10)
             soup = BeautifulSoup(response.content, 'html.parser')
             
             # Extract basic info
@@ -126,7 +162,17 @@ class WebResearchService:
             
             return info
             
+        except requests.exceptions.Timeout:
+            logger.warning(f"Timeout extracting info from {url}")
+            return {"url": url, "error": "timeout"}
+        except requests.exceptions.ConnectionError:
+            logger.warning(f"Connection error extracting info from {url}")
+            return {"url": url, "error": "connection_error"}
+        except requests.exceptions.HTTPError as e:
+            logger.warning(f"HTTP error extracting info from {url}: {e}")
+            return {"url": url, "error": f"http_{e.response.status_code}"}
         except Exception as e:
+            logger.error(f"Error extracting info from {url}: {e}")
             return {"url": url, "error": str(e)}
     
     def research_alumni_batch(self, names: List[str]) -> Dict[str, List[Dict[str, Any]]]:
@@ -137,7 +183,7 @@ class WebResearchService:
         for name in names:
             logger.info(f"Researching {name}...")
             results[name] = self.search_person_web(name)
-            time.sleep(2)  # Be respectful to search engines
+            time.sleep(3)  # Increased delay between names to be more respectful
             
         logger.info(f"Batch research completed for {len(results)} alumni")
         return results
