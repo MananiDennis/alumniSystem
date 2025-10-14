@@ -55,6 +55,42 @@ class SearchService:
     def get_location_distribution(self) -> Dict[str, int]:
         return self.get_distribution('location')
     
+    def get_graduation_year_distribution(self) -> Dict[str, int]:
+        return self.get_distribution('graduation_year')
+    
+    def get_confidence_score_distribution(self) -> Dict[str, int]:
+        """Get distribution of confidence scores in 10% ranges (0-10%, 10-20%, etc.)"""
+        all_alumni = self.repository.get_all_alumni()
+        ranges = {
+            '0-10%': 0, '10-20%': 0, '20-30%': 0, '30-40%': 0, '40-50%': 0,
+            '50-60%': 0, '60-70%': 0, '70-80%': 0, '80-90%': 0, '90-100%': 0
+        }
+        
+        for alumni in all_alumni:
+            score = alumni.confidence_score * 100 # converting 0 - 1 to 0 - 100 scale
+            if score < 10:
+                ranges['0-10%'] += 1
+            elif score < 20:
+                ranges['10-20%'] += 1
+            elif score < 30:
+                ranges['20-30%'] += 1
+            elif score < 40:
+                ranges['30-40%'] += 1
+            elif score < 50:
+                ranges['40-50%'] += 1
+            elif score < 60:
+                ranges['50-60%'] += 1
+            elif score < 70:
+                ranges['60-70%'] += 1
+            elif score < 80:
+                ranges['70-80%'] += 1
+            elif score < 90:
+                ranges['80-90%'] += 1
+            else:
+                ranges['90-100%'] += 1
+        
+        return ranges
+    
     def get_alumni_stats(self) -> Dict[str, Any]:
         # Get comprehensive alumni statistics
         all_alumni = self.repository.get_all_alumni()

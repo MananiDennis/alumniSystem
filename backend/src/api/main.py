@@ -109,7 +109,7 @@ app.add_middleware(
         "http://127.0.0.1:3000",
         "https://alumni-system-nu.vercel.app",
         "https://alumnisystem-t442.onrender.com",
-        "*"
+        "*"  # Allow all origins for debugging - remove this in production
     ],
     allow_credentials=True,
     allow_methods=["*"],

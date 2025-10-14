@@ -46,13 +46,21 @@ const Dashboard = () => {
       setStats(statsData);
 
       // Fetch additional analytics data
-      const [industriesRes, locationsRes, companiesRes, recentRes] =
-        await Promise.all([
-          axios.get(api.endpoints.industries),
-          axios.get(api.endpoints.locations),
-          axios.get(api.endpoints.companies),
-          axios.get(api.endpoints.recent),
-        ]);
+      const [
+        industriesRes,
+        locationsRes,
+        companiesRes,
+        recentRes,
+        graduationRes,
+        confidenceRes,
+      ] = await Promise.all([
+        axios.get(api.endpoints.industries),
+        axios.get(api.endpoints.locations),
+        axios.get(api.endpoints.companies),
+        axios.get(api.endpoints.recent),
+        axios.get(api.endpoints.dashboardGraduationYears),
+        axios.get(api.endpoints.dashboardConfidenceScores),
+      ]);
 
       // Transform industry distribution for pie chart
       const industryData = Object.entries(
@@ -78,25 +86,21 @@ const Dashboard = () => {
         count,
       }));
 
-      // Mock graduation years data (this would need a backend endpoint)
-      const graduationYears = [
-        { year: "2018", count: 45 },
-        { year: "2019", count: 52 },
-        { year: "2020", count: 38 },
-        { year: "2021", count: 41 },
-        { year: "2022", count: 35 },
-        { year: "2023", count: 28 },
-      ];
+      // Transform graduation years data from API
+      const graduationYears = Object.entries(graduationRes.data || {}).map(
+        ([year, count]) => ({
+          year,
+          count,
+        })
+      );
 
-      // Mock confidence trend (this would need a backend endpoint)
-      const confidenceTrend = [
-        { month: "Jan", confidence: 0.75 },
-        { month: "Feb", confidence: 0.78 },
-        { month: "Mar", confidence: 0.82 },
-        { month: "Apr", confidence: 0.79 },
-        { month: "May", confidence: 0.85 },
-        { month: "Jun", confidence: 0.88 },
-      ];
+      // Transform confidence scores data from API
+      const confidenceData = Object.entries(confidenceRes.data || {}).map(
+        ([range, count]) => ({
+          range,
+          count,
+        })
+      );
 
       // Calculate employment status from backend data
       const totalAlumni = statsData.total_alumni || 0;
@@ -127,7 +131,7 @@ const Dashboard = () => {
         industryDistribution: industryData,
         graduationYears,
         locations: locationData,
-        confidenceTrend,
+        confidenceData,
         jobStatus: jobStatusData,
         topCompanies: companiesRes.data.companies || [],
       });
@@ -147,7 +151,7 @@ const Dashboard = () => {
         industryDistribution: [],
         graduationYears: [],
         locations: [],
-        confidenceTrend: [],
+        confidenceData: [],
         jobStatus: [],
         topCompanies: [],
       });
@@ -358,31 +362,20 @@ const Dashboard = () => {
           </Paper>
         </Grid>
 
-        {/* Confidence Score Trend */}
+        {/* Confidence Score Distribution */}
         <Grid item xs={12} md={6}>
           <Paper sx={{ p: 3, borderRadius: 3, height: 400 }}>
             <Typography variant="h6" sx={{ mb: 2, fontWeight: "bold" }}>
-              Confidence Score Trend
+              Confidence Score Distribution
             </Typography>
             <ResponsiveContainer width="100%" height="85%">
-              <AreaChart data={analytics.confidenceTrend}>
+              <BarChart data={analytics.confidenceData}>
                 <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="month" />
-                <YAxis
-                  domain={[0, 1]}
-                  tickFormatter={(value) => `${(value * 100).toFixed(0)}%`}
-                />
-                <Tooltip
-                  formatter={(value) => `${(value * 100).toFixed(1)}%`}
-                />
-                <Area
-                  type="monotone"
-                  dataKey="confidence"
-                  stroke="#8884d8"
-                  fill="#8884d8"
-                  fillOpacity={0.6}
-                />
-              </AreaChart>
+                <XAxis dataKey="range" />
+                <YAxis />
+                <Tooltip />
+                <Bar dataKey="count" fill="#ff7c7c" />
+              </BarChart>
             </ResponsiveContainer>
           </Paper>
         </Grid>

@@ -76,6 +76,26 @@ def get_dashboard_stats():
         search_service.close()
 
 
+@router.get("/dashboard/graduation-years")
+def get_graduation_year_distribution():
+    """Get distribution of alumni by graduation year"""
+    search_service = SearchService()
+    try:
+        return search_service.get_graduation_year_distribution()
+    finally:
+        search_service.close()
+
+
+@router.get("/dashboard/confidence-scores")
+def get_confidence_score_distribution():
+    """Get distribution of alumni confidence scores in ranges"""
+    search_service = SearchService()
+    try:
+        return search_service.get_confidence_score_distribution()
+    finally:
+        search_service.close()
+
+
 @router.get("/dashboard/export")
 def dashboard_export_alumni_data(format: str = "excel", industry: Optional[str] = None, graduation_year_min: Optional[int] = None, graduation_year_max: Optional[int] = None, location: Optional[str] = None):
     return export_alumni_data(format, industry, graduation_year_min, graduation_year_max, location)

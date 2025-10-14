@@ -33,6 +33,8 @@ export const api = {
     dashboardExport: `${API_BASE_URL}/dashboard/export`,
     dashboardRecent: `${API_BASE_URL}/dashboard/recent`,
     dashboardCollect: `${API_BASE_URL}/dashboard/collect`,
+    dashboardGraduationYears: `${API_BASE_URL}/dashboard/graduation-years`,
+    dashboardConfidenceScores: `${API_BASE_URL}/dashboard/confidence-scores`,
 
     // Export endpoints
     export: `${API_BASE_URL}/export`,

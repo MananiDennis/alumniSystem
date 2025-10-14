@@ -13,27 +13,23 @@ The main functions of the system are:
 graph TB
     A[React Frontend] --> B[FastAPI Backend]
     B --> C[SQLAlchemy ORM]
-    C --> D[(SQLite/PostgreSQL)]
+    C --> D[(MySQL)]
     
     B --> E[Alumni Collector]
     E --> F[Web Research Service]
-    E --> G[BrightData Service]
-    E --> L[LinkedIn Service]
-    L --> NotFit(["🚫Not Fit"])
-    G --> X(["🚫Unethical"])
-    E --> H[Manual Entry]
+    E --> G[Manual Entry]
     
-    F <--> I[DuckDuckGo Search]
-    F <--> J[BeautifulSoup Parser]
-    F <--> K[AI Verification Service]
+    F <--> H[DuckDuckGo Search]
+    F <--> I[BeautifulSoup Parser]
+    F <--> J[AI Verification Service]
     
-    K --> OpenAI[OpenAI GPT-4]
+    J --> OpenAI[OpenAI GPT-4]
     
-    B --> M[Search Service]
-    B --> N[Export Service]
-    B --> O[Update Service]
+    B --> K[Search Service]
+    B --> L[Export Service]
+    B --> M[Update Service]
     
-    P[CLI Tools] --> B
+    N[CLI Tools] --> B
 ```
 ### The frontend
 - The frontend was built with **React Js** and **materials UI library**. We used **axios** to reach the backend.
@@ -85,7 +81,7 @@ frontend/
 
 
 ### Backend
-- The backend is built with **FastAPI** and **SQLAlchemy**, providing RESTful APIs for data management and processing.
+- The backend is built with **FastAPI** and **SQLAlchemy**, providing RESTful APIs for data management and processing. We also used external services and APIs like **DuckDuckGo**, **BeautifulSoup**, and LLMs like **OpenAI GPT-4o-mini**
 ```
 backend/
 ├── Dockerfile                    # Containerization for deployment
@@ -117,10 +113,7 @@ backend/
 │       ├── ai_query_service.py   # AI query processing
 │       ├── ai_verification.py    # AI-powered verification
 │       ├── alumni_collector.py   # Alumni data collection
-│       ├── brightdata_parser.py  # BrightData response parsing
-│       ├── brightdata_service.py # BrightData API integration
 │       ├── export_service.py     # Data export logic
-│       ├── linkedin_official_api.py # LinkedIn API integration
 │       ├── search_service.py     # Search functionality
 │       ├── update_service.py     # Data update operations
 │       └── web_research_service.py # Web research capabilities
@@ -132,10 +125,10 @@ backend/
 - **main.py**: Central FastAPI application setup with CORS middleware, authentication utilities, and legacy endpoint implementations. Includes modular router registration and serves as the main API entry point with comprehensive endpoint coverage.
 - **alumni.py**: Alumni CRUD operations router providing endpoints for retrieving, viewing, and deleting individual alumni profiles, with proper error handling and data formatting.
 - **auth.py**: Authentication router handling JWT token-based login, user verification, and current user information retrieval using secure password validation.
-- **collection.py**: Background data collection router managing asynchronous alumni data gathering tasks with progress tracking, supporting multiple collection methods (BrightData, web research).
+- **collection.py**: Background data collection router managing asynchronous alumni data gathering tasks with progress tracking, supporting web research collection methods.
 - **export.py**: Data export and dashboard router providing Excel/CSV export functionality with filtering options, recent alumni listings, and dashboard statistics endpoints.
 - **health.py**: System health monitoring router with database connectivity checks and alumni count reporting for operational status assessment.
-- **query.py**: AI-powered query router handling natural language processing for alumni data queries using OpenAI GPT-4 and web research capabilities for enhanced data discovery.
+- **query.py**: AI-powered query router handling natural language processing for alumni data queries using OpenAI GPT-4o-mini and web research capabilities for enhanced data discovery.
 - **stats.py**: Statistics and analytics router providing distribution analysis for industries, companies, locations, and comprehensive alumni statistics for data insights.
 - **upload.py**: File upload router for bulk alumni name processing from Excel/CSV files with optional automatic data collection integration.
 - **utils.py**: API utility functions including standardized alumni data formatting for consistent JSON responses across all endpoints.
@@ -158,6 +151,8 @@ backend/
 | | `/dashboard/export` | GET | Export dashboard data in various formats |
 | | `/dashboard/recent` | GET | Get recently added or updated alumni profiles |
 | | `/dashboard/collect` | POST | Trigger data collection from dashboard |
+| | `/dashboard/graduation-years` | GET | Get distribution of alumni by graduation year |
+| | `/dashboard/confidence-scores` | GET | Get distribution of alumni confidence scores in ranges |
 | | `/export` | GET | Export alumni data to Excel/CSV with filters |
 | | `/recent` | GET | Get recently added alumni profiles |
 | **health.py** | `/health` | GET | System health check and database connectivity status |
@@ -172,100 +167,201 @@ backend/
 #### Config folder
 - Holds application configuration settings, such as database URLs, API keys, and environment variables.
 
+#### Task Collection System
+- Manages asynchronous background tasks for alumni data collection, providing progress tracking and persistence across application restarts.
+- **Task Management**: Uses database-backed task storage with unique UUID identifiers, status tracking, and result persistence. Supports both web research and manual collection methods with comprehensive error handling and progress reporting.
+
+**Task Database Model (TaskDB)**:
+- `id`: UUID primary key for unique task identification
+- `status`: Current task state (running/completed/failed)
+- `names`: JSON array of input names to process
+- `method`: Collection method (web-research/manual)
+- `start_time`: Task initiation timestamp
+- `end_time`: Task completion timestamp
+- `results_count`: Number of successful profiles collected
+- `results`: JSON array of formatted alumni profiles
+- `failed_names`: JSON array of names that failed collection with reasons
+- `error`: General error message if task failed
+
+
+
 #### Database folder
-- Manages database connections, schema definitions, and data access operations using SQLAlchemy ORM.
-- **connection.py**: Manages database connections and sessions using SQLAlchemy. Sets up a SQLite database for development with connection pooling, creates all database tables, and automatically adds default users (admin and faculty) if the database is empty. Provides session management utilities for database operations.
+- Manages database connections, schema definitions, and data access operations using SQLAlchemy ORM with MySQL.
+- **connection.py**: Manages database connections and sessions using SQLAlchemy. Sets up a MySQL database connection with SSL encryption, creates all database tables, and automatically adds default users (admin and faculty) if the database is empty. Provides session management utilities for database operations.
 - **init_db.py**: A standalone database initialization script that creates all database tables and adds initial user data. Can be run independently to set up the database schema and populate it with default admin and faculty users. Includes proper logging for initialization status.
-- **models.py**: Defines the SQLAlchemy database models (tables) using declarative base. Contains four main models: UserDB (user accounts with roles), AlumniProfileDB (main alumni profile data), WorkHistoryDB (employment history), and DataSourceDB (data collection sources and metadata).
-  ```mermaid
-  erDiagram
-      UserDB {
-          int id PK
-          string email UK
-          string password_hash
-          string name
-          UserRole role
-          datetime created_at
-          datetime last_login
-      }
-      
-      AlumniProfileDB {
-          int id PK
-          string full_name
-          int graduation_year
-          string current_job_title
-          string current_company
-          string industry
-          string location
-          string linkedin_url
-          float confidence_score
-          datetime last_updated
-          datetime created_at
-      }
-      
-      WorkHistoryDB {
-          int id PK
-          int alumni_id FK
-          string job_title
-          string company
-          date start_date
-          date end_date
-          bool is_current
-          string industry
-          string location
-      }
-      
-      DataSourceDB {
-          int id PK
-          int alumni_id FK
-          string source_type
-          string source_url
-          text data_collected
-          datetime collection_date
-          float confidence_score
-      }
-      
-      AlumniProfileDB ||--o{ WorkHistoryDB : "has many"
-      AlumniProfileDB ||--o{ DataSourceDB : "has many"
-  ```
-- **repository.py**: Contains the AlumniRepository class that serves as the data access layer. Provides comprehensive CRUD operations for alumni profiles including create, read, update, delete, and search functionality. Handles work history and data source management, with conversion between database models and application domain models.
-  ```mermaid
-  flowchart TD
-      A[AlumniRepository] --> B{CRUD Operation}
-      
-      B -->|Create| C[create_alumni]
-      B -->|Read| D[get_alumni_by_id]
-      B -->|Read| E[get_alumni_by_name]
-      B -->|Read| F[search_alumni]
-      B -->|Read| G[get_all_alumni]
-      B -->|Update| H[update_alumni]
-      B -->|Delete| I[delete_alumni]
-      
-      C --> J[Convert to DB Model]
-      J --> K[Add Work History]
-      K --> L[Add Data Sources]
-      L --> M[Commit to DB]
-      
-      D --> N[Query by ID]
-      E --> O[Query by Name]
-      F --> P[Apply Filters]
-      G --> Q[Query All with Pagination]
-      
-      H --> R[Update Fields]
-      R --> S[Update Work History]
-      S --> T[Commit Changes]
-      
-      I --> U[Delete Record]
-      U --> V[Commit Deletion]
-      
-      M --> W[Return AlumniProfile]
-      N --> W
-      O --> W
-      P --> W
-      Q --> W
-      T --> W
-      V --> W
-  ```
+- **models.py**: Defines the SQLAlchemy database models (tables) using declarative base. Contains five main models: UserDB (user accounts with roles), AlumniProfileDB (main alumni profile data), WorkHistoryDB (employment history), EducationDB (education history), DataSourceDB (data collection sources and metadata), and TaskDB (background collection tasks).
+```plantuml
+@startuml Database ER Diagram
+entity UserDB {
+    * id : int <<PK>>
+    --
+    * email : string <<UK>>
+    * password_hash : string
+    * name : string
+    * role : UserRole
+    * created_at : datetime
+    * last_login : datetime?
+}
+
+entity AlumniProfileDB {
+    * id : int <<PK>>
+    --
+    full_name : string
+    graduation_year : int
+    current_job_title : string
+    current_company : string
+    industry : string
+    location : string
+    linkedin_url : string
+    confidence_score : float
+    last_updated : datetime
+    * created_at : datetime
+}
+
+entity WorkHistoryDB {
+    * id : int <<PK>>
+    --
+    * alumni_id : int <<FK>>
+    job_title : string
+    company : string
+    start_date : date
+    end_date : date
+    is_current : bool
+    industry : string
+    location : string
+}
+
+entity EducationDB {
+    * id : int <<PK>>
+    --
+    * alumni_id : int <<FK>>
+    institution : string
+    degree : string
+    field_of_study : string
+    graduation_year : int
+    start_year : int
+}
+
+entity DataSourceDB {
+    * id : int <<PK>>
+    --
+    * alumni_id : int <<FK>>
+    source_type : string
+    source_url : string
+    data_collected : text
+    collection_date : datetime
+    confidence_score : float
+}
+
+entity TaskDB {
+    * id : string <<PK>>
+    --
+    status : string
+    names : text
+    method : string
+    start_time : datetime
+    end_time : datetime?
+    results_count : int
+    results : text
+    failed_names : text
+    error : text
+}
+
+UserDB ||..o{ AlumniProfileDB : "manages"
+AlumniProfileDB ||..o{ WorkHistoryDB : "has many"
+AlumniProfileDB ||..o{ EducationDB : "has many"
+AlumniProfileDB ||..o{ DataSourceDB : "has many"
+
+note right of UserDB : User accounts with roles
+note right of AlumniProfileDB : Main alumni profile data
+note right of WorkHistoryDB : Employment history records
+note right of EducationDB : Education history records
+note right of DataSourceDB : Data collection sources
+note right of TaskDB : Background collection tasks
+@enduml
+```
+- **repository.py**: Contains the AlumniRepository class that serves as the data access layer. Provides comprehensive CRUD operations for alumni profiles including create, read, update, delete, and advanced search functionality with multiple filter criteria. Handles work history, education history, and data source management, with robust conversion between database models and application domain models. Includes data validation, pagination support, and proper error handling.
+```plantuml
+@startuml AlumniRepository Operations
+left to right direction
+class AlumniRepository {
+    +create_alumni(alumni: AlumniProfile): AlumniProfile
+    +get_alumni_by_id(alumni_id: int): AlumniProfile?
+    +get_alumni_by_name(name: str): List[AlumniProfile]
+    +search_alumni(name?, industry?, company?, location?, graduation_year_min?, graduation_year_max?): List[AlumniProfile]
+    +get_all_alumni(limit?, offset): List[AlumniProfile]
+    +update_alumni(alumni: AlumniProfile): AlumniProfile
+    +delete_alumni(alumni_id: int): bool
+    +add_work_history(alumni_id: int, job: JobPosition)
+    +add_education_history(alumni_id: int, education: Education)
+    +add_data_source(alumni_id: int, source: DataSource)
+    -convert_db_to_alumni_profile(db_alumni: AlumniProfileDB): AlumniProfile
+}
+
+note right of AlumniRepository
+    Data Access Layer
+    Handles CRUD operations
+    Manages relationships
+    Converts between models
+    Includes validation
+end note
+
+AlumniRepository --> AlumniProfileDB : creates/updates
+AlumniRepository --> WorkHistoryDB : manages
+AlumniRepository --> EducationDB : manages
+AlumniRepository --> DataSourceDB : manages
+
+package "Database Operations" as DB_OPS {
+    class CreateOperation {
+        +Validate Input Data
+        +Convert to DB Model
+        +Add Work History
+        +Add Education History
+        +Add Data Sources
+        +Commit to DB
+    }
+    
+    class ReadOperations {
+        +Query by ID
+        +Query by Name (Partial Match)
+        +Advanced Search with Filters
+        +Query All with Pagination
+        +Convert to Domain Model
+    }
+    
+    class UpdateOperation {
+        +Validate Alumni ID
+        +Update Basic Fields
+        +Replace Work History
+        +Replace Education History
+        +Commit Changes
+    }
+    
+    class DeleteOperation {
+        +Delete Record
+        +Cascade Delete Related Data
+        +Commit Deletion
+    }
+    
+    class HelperOperations {
+        +Add Work History Entry
+        +Add Education History Entry
+        +Add Data Source Entry
+    }
+}
+
+AlumniRepository --> CreateOperation : uses
+AlumniRepository --> ReadOperations : uses
+AlumniRepository --> UpdateOperation : uses
+AlumniRepository --> DeleteOperation : uses
+AlumniRepository --> HelperOperations : uses
+
+CreateOperation --> AlumniProfile : returns
+ReadOperations --> AlumniProfile : returns
+UpdateOperation --> AlumniProfile : returns
+DeleteOperation --> "boolean" : returns
+@enduml
+```
 
 #### Models folder
 - Defines Pydantic-style data models for application domain objects with validation and type safety.
@@ -354,63 +450,122 @@ User --|> UserDB : extends
 
 #### Services folder
 - Contains business logic services for data collection, AI processing, export, and external API integrations.
-- Includes services for BrightData, LinkedIn API, web research, and AI verification.
+- Includes services for web research and AI verification.
 
 ##### **ai_query_service.py**
-- Handles AI-powered natural language queries, converting user questions into structured database queries using OpenAI GPT-4 for intelligent alumni data analysis and filtering.
-```mermaid
-sequenceDiagram
-    participant User
-    participant API
-    participant AIQueryService
-    participant OpenAI
-    participant Database
-    participant SearchService
+- Handles AI-powered natural language queries, converting user questions into structured database queries using OpenAI GPT-4o-mini for intelligent alumni data analysis and filtering.
+```plantuml
+@startuml AI Query Service Sequence Diagram
+participant User
+participant API
+participant AIQueryService
+participant OpenAI
+participant SearchService
+database Database
 
-    User->>API: POST /query (natural language question)
-    API->>AIQueryService: process_query(question)
-    AIQueryService->>OpenAI: Generate structured query from natural language
-    OpenAI-->>AIQueryService: Structured query parameters
-    AIQueryService->>SearchService: execute_structured_query(params)
-    SearchService->>Database: Execute optimized query
-    Database-->>SearchService: Alumni results
-    SearchService-->>AIQueryService: Filtered results
-    AIQueryService-->>API: Formatted response
-    API-->>User: Alumni data with insights
+User -> API: POST /query\n"<b>Show me mining sector graduates</b>\n <b> from Perth working at Rio Tinto"
+API -> AIQueryService: process_query("\nShow me mining sector graduates\nfrom Perth working at Rio Tinto")
+AIQueryService -> OpenAI: Generate structured query\n from natural language
+note right: Prompt: "Convert this natural language query...\nReturn only valid JSON with parameters"
+OpenAI --> AIQueryService: {\n"industry": "Mining", \n"location": "Perth", \n"company": "Rio Tinto"}
+AIQueryService -> SearchService: execute_structured_query\n({"industry": "Mining", "location": "Perth", "company": "Rio Tinto"})
+SearchService -> Database: SELECT * FROM alumni_profiles\nWHERE industry = 'Mining'\nAND location LIKE '%Perth%'\nAND current_company LIKE '%Rio Tinto%'
+Database --> SearchService: [AlumniProfile(\nid=123, \nname="John Smith", \nindustry="Mining", \nlocation="Perth", \ncurrent_company="Rio Tinto")]
+SearchService --> AIQueryService: [{"\nid": 123, \n"name": "John Smith", \n"industry": "Mining", \n"location": "Perth", \n"current_job": {"title": "Senior Engineer", \n"company": "Rio Tinto"}}]
+AIQueryService --> API: {"query": "Show me mining sector graduates \nfrom Perth working at Rio Tinto", \n"results": [{"id": 123, "name": "John Smith", \n"industry": "Mining", "location": "Perth", \n"current_job": {"title": "Senior Engineer", \n"company": "Rio Tinto"}}], "count": 1}
+API --> User: {"results": [{"name": "John Smith", \n"industry": "Mining", "location": "Perth", \n"current_job": {"title": "Senior Engineer", \n"company": "Rio Tinto"}}], "count": 1}
+@enduml
 ```
 
 ##### **ai_verification.py**
-- Performs AI-powered verification of alumni profiles, using OpenAI to match and validate profile data with confidence scoring for data quality assurance.
-```mermaid
-flowchart TD
-    A[New Profile Data] --> B{Data Source}
-    B -->|BrightData| C[Extract LinkedIn Data]
-    B -->|Web Research| D[Extract Web Data]
-    B -->|Manual Entry| E[Validate Manual Data]
+- Performs AI-powered verification of alumni profiles using OpenAI GPT-4o-mini, with comprehensive industry normalization and confidence scoring for data quality assurance.
+```plantuml
+@startuml AI Verification Service Flowchart
+title AI Verification Service Process Flow
 
-    C --> F[ai_verification.py]
-    D --> F
-    E --> F
+start
 
-    F --> G[Generate Verification Prompt]
-    G --> H[OpenAI GPT-4 Analysis]
-    H --> I{Confidence Score}
+:New Profile Data
+{name: "John Smith", company: "Rio Tinto", title: "Senior Engineer"};
 
-    I -->|High ≥0.8| J[Auto-Approve Profile]
-    I -->|Medium 0.5-0.8| K[Flag for Review]
-    I -->|Low <0.5| L[Reject Profile]
+if (OpenAI API Available?) then (Yes)
+  :AIVerificationService.verify_profile_match()
+  Generate AI Prompt with target person and scraped data;
+  note right
+    **AI Analysis Criteria:**
+    - Name similarity (exact match, nicknames)
+    - Location consistency (Australian preferred)
+    - Education timing alignment
+    - Career progression plausibility
+    - Overall profile coherence
+  end note
+  
+  :Call OpenAI GPT-4o-mini API
+  Model: gpt-4o-mini, Temperature: 0.1, Max tokens: 500;
+  
+  :Parse JSON Response
+  {is_match: true/false, confidence_score: 0.0-1.0, reason: "...", extracted_info: {...}};
+  
+  if (JSON Parse Success?) then (Yes)
+    :Return VerificationResult
+    is_match, confidence_score, reason, extracted_info;
+  else (No)
+    :Fallback to Basic Verification;
+  endif
+  
+elseif (No)
+  :Basic Verification (No AI)
+  Name similarity calculation + location matching;
+  note right
+    **Basic Scoring:**
+    - Name similarity: 70% weight
+    - Location match: +30% bonus
+    - Match threshold: >0.6 confidence
+  end note
+endif
 
-    J --> M[Save to Database]
-    K --> N[Human Review Queue]
-    L --> O[Discard Data]
+:Industry Normalization
+Map scraped industry to IndustryType enum using comprehensive mapping;
+note right
+    **Supported Industries:**
+    Technology, Finance, Healthcare, Education,
+    Consulting, Mining, Government, Non-Profit,
+    Retail, Manufacturing, Other
+end note
 
-    M --> P[Return Verified Profile]
-    N --> P
-    O --> Q[Log Rejection]
+:Return VerificationResult
+{is_match: bool, confidence_score: float, reason: str, extracted_info: dict};
+
+stop
+
+legend right
+  **Verification Features:**
+  - OpenAI GPT-4o-mini integration
+  - Industry normalization mapping
+  - Confidence scoring (0.0-1.0)
+  - Fallback basic verification
+  - Australian alumni focus
+  - Conservative matching to avoid false positives
+endlegend
+@enduml
 ```
 
+**Key Methods:**
+- `verify_profile_match()`: Main verification method using AI analysis
+- `normalize_industry()`: Maps industry strings to standardized IndustryType enum values
+- `convert_web_data_to_profile()`: Converts unstructured web research into structured AlumniProfile objects
+- `enhance_profile_data()`: Uses AI to clean and enhance scraped profile data
+- `basic_verification()`: Fallback verification without AI using name/location matching
+
+**Industry Mapping Examples:**
+- "Information Technology" → "Technology"
+- "Financial Services" → "Finance" 
+- "Mining & Resources" → "Mining"
+- "Government Administration" → "Government"
+- Unknown industries → "Other"
+
 ##### **alumni_collector.py**
-- Orchestrates multiple data collection methods, coordinating between manual entry, web research, BrightData scraping, and LinkedIn API to gather comprehensive alumni information.
+- Orchestrates data collection methods, coordinating between manual entry and web research to gather comprehensive alumni information.
 ```plantuml
 @startuml Alumni Collector State Diagram
 [*] --> CollectionRequest : Alumni names list
@@ -419,13 +574,9 @@ state DataCollection as "Data Collection Methods" {
     [*] --> Orchestrator : alumni_collector.py
     Orchestrator --> Manual : Manual Entry
     Orchestrator --> WebResearch : Web Research
-    Orchestrator --> BrightData : BrightData Scraping
-    Orchestrator --> LinkedInAPI : LinkedIn Official API
     
     Manual --> Aggregator : Profile Data
     WebResearch --> Aggregator : Profile Data
-    BrightData --> Aggregator : Profile Data
-    LinkedInAPI --> Aggregator : Profile Data
     
     Aggregator --> Deduplication : Remove duplicates
     Deduplication --> Validation : AI Verification
@@ -437,7 +588,258 @@ DataCollection --> [*] : Collection complete
 @enduml
 ```
 
-##### **brightdata_parser.py**
+##### **export_service.py**
+- Handles exporting alumni data to Excel and CSV formats, including work history, summary statistics, and filtered exports with customizable formatting options.
+```plantuml
+@startuml Export Service Flowchart
+title Export Service Process Flow
+
+start
+
+:Export Request
+{type: "excel", filters: {...}};
+
+if (Export Type?) then (Excel)
+  :Generate XLSX Workbook;
+  :Create Excel Writer;
+else (CSV)
+  :Generate CSV File;
+  :Create CSV Writer;
+endif
+
+:Query Alumni Data
+from database with filters;
+
+:Apply Additional Filters
+(date range, industry, location);
+
+:Format Data Structure
+Convert to export format;
+
+if (Include Work History?) then (Yes)
+  :Add Work History Sheet
+  Include employment timeline;
+else (No)
+  :Skip Work History
+  Basic profile only;
+endif
+
+:Add Summary Statistics
+(count, averages, distributions);
+
+:Apply Styling & Formatting
+(headers, colors, borders);
+
+:Save File to Storage
+Generate unique filename;
+
+:Return File URL
+{url: "/exports/file.xlsx", size: "2.3MB"};
+
+stop
+
+legend right
+  **Export Options:**
+  - Excel: Multi-sheet workbook with formatting
+  - CSV: Simple tabular format
+  - Filters: Date, industry, location, graduation year
+  - Includes: Work history, statistics, custom formatting
+endlegend
+@enduml
+```
+
+##### **search_service.py**
+- Provides optimized search functionality for alumni data, including filtering, statistics, and distribution analysis across industries, locations, and companies.
+```plantuml
+@startuml Search Service Flowchart
+title Search Service Process Flow
+
+start
+
+:Search Request
+{type: "basic", filters: {...}};
+
+switch (Request Type?)
+case (Basic Search)
+  :Parse Filters;
+  :Build SQL Query;
+case (Statistics)
+  :Parse Parameters;
+  :Build Aggregation Query;
+case (Analytics)
+  :Parse Filters;
+  :Build Analytics Query;
+endswitch
+
+:Execute Query;
+:Query Database;
+
+:Process Results;
+
+switch (Result Type?)
+case (Search Results)
+  :Format Alumni List;
+case (Statistics)
+  :Format Statistics;
+case (Analytics)
+  :Format Analytics;
+endswitch
+
+:Return Response;
+stop
+
+legend right
+  **Search Types:**
+  - Basic: Filtered alumni search
+  - Statistics: Industry/company distributions
+  - Analytics: Trends and insights
+endlegend
+@enduml
+```
+
+##### **update_service.py**
+- Manages updating existing alumni profiles with fresh data from web research, including batch updates, scheduling, and statistics on profile freshness and data quality.
+```plantuml
+@startuml Update Service State Diagram
+[*] --> ScheduledUpdate : Daily/Weekly trigger
+[*] --> ManualUpdate : Admin request
+
+ScheduledUpdate --> UpdateService : update_service.py
+ManualUpdate --> UpdateService
+
+state UpdateService as "Update Process" {
+    [*] --> IdentifyStale : Find profiles >30 days old
+    IdentifyStale --> FetchFreshData : Query web research
+    FetchFreshData --> CompareData : Compare with existing
+    CompareData --> MergeUpdates : Merge new information
+    MergeUpdates --> ValidateChanges : AI verification
+    ValidateChanges --> UpdateDatabase : Save changes
+    UpdateDatabase --> LogUpdate : Record update statistics
+}
+
+UpdateService --> [*] : Update complete
+
+note right of UpdateService
+    Batch processing with
+    progress tracking
+end note
+@enduml
+```
+
+##### **web_research_service.py**
+- Performs web research using DuckDuckGo search to find professional information about alumni, including LinkedIn profiles and ECU connections through HTML parsing.
+```plantuml
+@startuml Web Research Service Flow
+title Web Research Service Process Flow
+
+start
+
+partition "Input Processing" as Input {
+  :**Receive Alumni Name**\ntarget_name (string);
+  note right : e.g., "John Smith"
+}
+
+partition "Query Generation" as QueryGen {
+  :**Generate Search Queries**\nCreate multiple query variations;
+  note right
+    **Query Types Generated:**
+    1. "ECU + [Name] + Alumni"
+    2. "[Name] + LinkedIn Australia"
+    3. "[Name] + Professional"
+  end note
+
+  :**Query Examples**\n"John Smith ECU Edith Cowan University"\n"John Smith LinkedIn Australia"\n"John Smith professional";
+}
+
+partition "Web Search Execution" as Search {
+  :**Execute DuckDuckGo Search**\nDuckDuckGo HTML Search API;
+  note right
+    **Search Parameters:**
+    - q: generated query
+    - User-Agent: Browser-like headers
+    - Timeout: 10 seconds
+  end note
+
+  :**Process Search Results**\nParse HTML response with BeautifulSoup\nExtract top 5-10 search results per query;
+  note right
+    **Result Structure:**
+    - title: Page title
+    - url: Result URL
+    - snippet: Description text
+    - source: "DuckDuckGo"
+  end note
+}
+
+partition "Content Analysis" as Analysis {
+  :**Extract Professional Information**\nMultiple parallel extraction tasks;
+
+  fork
+    :**Validate ECU Connection**\nCheck for "Edith Cowan" or "ECU" mentions\nSet boolean flag for alumni relevance;
+  fork again
+    :**Extract LinkedIn URLs**\nFind linkedin.com/in/* patterns\nValidate professional profile URLs;
+  fork again
+    :**Extract Job Information**\nParse current position, company, industry\nExtract career progression indicators;
+  end fork
+
+  :**Aggregate Findings**\nCombine all extracted information\nRemove duplicates and irrelevant data;
+}
+
+partition "Quality Assessment" as Quality {
+  :**Calculate Confidence Score**\nWeighted scoring based on multiple factors;
+  note right
+    **Scoring Criteria:**
+    - ECU connection: +0.3
+    - LinkedIn profile: +0.4
+    - Job information: +0.3
+    - Total range: 0.0 - 1.0
+  end note
+
+  if (Confidence >= 0.5?) then (yes)
+    :**Accept Results**\nValid research data obtained;
+  else (no)
+    :**Reject Results**\nInsufficient quality detected;
+    note right : May trigger additional search queries
+  endif
+}
+
+partition "Data Packaging" as Packaging {
+  :**Create Data Source Records**\nBuild DataSource objects with metadata;
+  note right
+    **DataSource Fields:**
+    - source_type: "web-research"
+    - source_url: Original search result URL
+    - collection_date: Timestamp
+    - confidence_score: Calculated quality
+  end note
+
+  :**Format Response**\nStructure research results for output\nInclude extracted information and metadata;
+}
+
+partition "Output" as Output {
+  :**Return Research Results**\nList of search results with extracted data\nDeliver to calling service (AI verification, update service, etc.);
+}
+
+stop
+
+legend right
+  **Process Overview:**
+  1. Generate targeted search queries
+  2. Execute web searches via DuckDuckGo
+  3. Parse and extract professional information
+  4. Assess data quality and confidence
+  5. Package results for downstream processing
+endlegend
+@enduml
+```
+
+### Previous Data Collection Implementations (Not Used)
+
+During the development process, we explored several external data collection services and APIs that were ultimately not implemented due to ethical, technical, or business constraints. Below, we document these implementations for reference:
+
+#### BrightData Integration (Not Implemented - Ethical Concerns)
+BrightData (formerly Luminati Networks) is a web scraping and data collection service that provides residential proxies and scraping infrastructure. We implemented a complete integration but ultimately decided not to use it due to ethical concerns around automated LinkedIn scraping.
+
+##### **brightdata_parser.py** (Archived)
 - Parses BrightData API responses, converting raw scraped data into structured AlumniProfile objects with proper data validation and formatting.
 ```mermaid
 flowchart TD
@@ -471,7 +873,7 @@ flowchart TD
     T --> U[Return Error Response]
 ```
 
-##### **brightdata_service.py**
+##### **brightdata_service.py** (Archived)
 - Manages LinkedIn scraping via BrightData API, handling authentication, rate limiting, and data collection from LinkedIn profiles with anti-detection measures.
 ```mermaid
 sequenceDiagram
@@ -489,7 +891,7 @@ sequenceDiagram
     AntiDetection-->>BrightDataService: Stealth headers applied
 
     BrightDataService->>BrightDataAPI: POST scraping request
-    BrightDataAPI-->>BrightDataService: Job accepted
+    BrightDataAPI-->>BrightDataAPI: Job accepted
 
     BrightDataService->>BrightDataService: Poll for completion
     loop Polling
@@ -503,37 +905,16 @@ sequenceDiagram
     BrightDataService-->>Client: Parsed profile data
 ```
 
-##### **export_service.py**
-- Handles exporting alumni data to Excel and CSV formats, including work history, summary statistics, and filtered exports with customizable formatting options.
-```mermaid
-flowchart TD
-    A[Export Request] --> B{Export Type}
-    B -->|Excel| C[Generate XLSX]
-    B -->|CSV| D[Generate CSV]
+**Why BrightData Was Not Used:**
+- **Ethical Concerns**: Automated scraping of LinkedIn profiles violates LinkedIn's Terms of Service and raises privacy concerns
+- **Legal Risks**: Potential violations of data protection laws (GDPR, CCPA) and anti-scraping regulations
+- **Platform Integrity**: Undermines LinkedIn's business model and user trust
+- **Detection Risks**: LinkedIn actively blocks scraping attempts, making the solution unreliable
 
-    C --> E[Create Workbook]
-    D --> F[Create CSV Writer]
+#### LinkedIn Official API Integration (Not Implemented - Limited Functionality)
+LinkedIn provides official Partner APIs for developers, but these APIs have significant limitations for alumni data collection use cases.
 
-    E --> G[Query Alumni Data]
-    F --> G
-
-    G --> H[Apply Filters]
-    H --> I[Format Data]
-
-    I --> J{Include Work History?}
-    J -->|Yes| K[Add Work History Sheet]
-    J -->|No| L[Skip Work History]
-
-    K --> M[Add Summary Statistics]
-    L --> M
-
-    M --> N[Apply Styling]
-    N --> O[Save File]
-
-    O --> P[Return File URL]
-```
-
-##### **linkedin_official_api.py**
+##### **linkedin_official_api.py** (Archived)
 - Integrates with LinkedIn's official Partner APIs for compliant data collection, including people search and profile details with rate limiting and industry mapping.
 ```mermaid
 sequenceDiagram
@@ -559,94 +940,49 @@ sequenceDiagram
     LinkedInService-->>App: Structured alumni data
 ```
 
-##### **search_service.py**
-- Provides optimized search functionality for alumni data, including filtering, statistics, and distribution analysis across industries, locations, and companies.
+**Why LinkedIn Official API Was Not Used:**
+- **Limited Data Access**: APIs only provide basic profile information (name, headline, location) - no detailed work history, education, or contact information
+- **Partnership Requirements**: Requires formal partnership with LinkedIn and approval process
+- **Use Case Restrictions**: APIs are designed for lead generation, job search, and profile management, not comprehensive alumni tracking
+- **Cost and Complexity**: Expensive licensing fees and complex OAuth implementation
+- **Rate Limiting**: Very restrictive API limits unsuitable for batch data collection
+
+#### Updated System Architecture (Current Implementation)
+After evaluating these external services, we implemented a solution using only ethical web research methods:
+
 ```mermaid
-flowchart TD
-    A[Search Request] --> B{Request Type}
-
-    B -->|Basic Search| C[Parse Search Filters]
-    B -->|Statistics| D[Parse Stat Parameters]
-    B -->|Analytics| E[Parse Analytics Filters]
-
-    C --> F[Build SQL Query]
-    D --> G[Build Aggregation Query]
-    E --> H[Build Analytics Query]
-
-    F --> I[Execute Query]
-    G --> I
-    H --> I
-
-    I --> J[Database]
-    J --> K[Process Results]
-
-    K --> L{Result Type}
-    L -->|Search Results| M[Format Alumni List]
-    L -->|Statistics| N[Format Statistics]
-    L -->|Analytics| O[Format Analytics]
-
-    M --> P[Return Response]
-    N --> P
-    O --> P
+graph TB
+    A[React Frontend] --> B[FastAPI Backend]
+    B --> C[SQLAlchemy ORM]
+    C --> D[(MySQL)]
+    
+    B --> E[Alumni Collector]
+    E --> F[Web Research Service]
+    E --> G[Manual Entry]
+    
+    F <--> H[DuckDuckGo Search]
+    F <--> I[BeautifulSoup Parser]
+    F <--> J[AI Verification Service]
+    
+    J --> OpenAI[OpenAI GPT-4o-mini]
+    
+    B --> K[Search Service]
+    B --> L[Export Service]
+    B --> M[Update Service]
+    
+    N[CLI Tools] --> B
+    
+    classDef deprecated fill:#ffcccc,stroke:#ff0000,stroke-dasharray: 5 5
+    classDef ethical fill:#ccffcc,stroke:#00aa00
+    
+    class F,G,J ethical
 ```
 
-##### **update_service.py**
-- Manages updating existing alumni profiles with fresh data from BrightData, including batch updates, scheduling, and statistics on profile freshness and data quality.
-```plantuml
-@startuml Update Service State Diagram
-[*] --> ScheduledUpdate : Daily/Weekly trigger
-[*] --> ManualUpdate : Admin request
-
-ScheduledUpdate --> UpdateService : update_service.py
-ManualUpdate --> UpdateService
-
-state UpdateService as "Update Process" {
-    [*] --> IdentifyStale : Find profiles >30 days old
-    IdentifyStale --> FetchFreshData : Query BrightData API
-    FetchFreshData --> CompareData : Compare with existing
-    CompareData --> MergeUpdates : Merge new information
-    MergeUpdates --> ValidateChanges : AI verification
-    ValidateChanges --> UpdateDatabase : Save changes
-    UpdateDatabase --> LogUpdate : Record update statistics
-}
-
-UpdateService --> [*] : Update complete
-
-note right of UpdateService
-    Batch processing with
-    progress tracking
-end note
-@enduml
-```
-
-##### **web_research_service.py**
-- Performs web research using DuckDuckGo search to find professional information about alumni, including LinkedIn profiles and ECU connections through HTML parsing.
-```mermaid
-flowchart TD
-    A[Alumni Name] --> B[web_research_service.py]
-    B --> C[Generate Search Queries]
-    C --> D["ECU + [Name] + Alumni"]
-    C --> E["[Name] + LinkedIn"]
-    C --> F["[Name] + Professional"]
-
-    D --> G[DuckDuckGo Search]
-    E --> G
-    F --> G
-
-    G --> H[Parse HTML Results]
-    H --> I[Extract Professional Info]
-    I --> J[Validate ECU Connection]
-    I --> K[Extract LinkedIn URLs]
-    I --> L[Extract Job Information]
-
-    J --> M[Filter Relevant Data]
-    K --> M
-    L --> M
-
-    M --> N[Calculate Confidence Score]
-    N --> O[Create Data Source Records]
-    O --> P[Return Research Results]
-```
+**Key Lessons Learned:**
+1. **Ethics First**: Prioritize ethical data collection methods over comprehensive but questionable approaches
+2. **API Limitations**: Official APIs often have significant restrictions that limit their usefulness
+3. **Web Research Balance**: Public web research can provide valuable insights while respecting platform terms
+4. **Transparency**: Documenting failed approaches helps future developers understand decision-making processes
 
 ## Technologies Used
 
@@ -664,10 +1000,8 @@ flowchart TD
 - **Pandas**: Data manipulation and analysis library
 - **OpenPyXL**: Library for reading and writing Excel files
 - **BeautifulSoup4**: HTML and XML parsing library
-- **BrightData**: Web scraping and data collection service
-- **LinkedIn Official API**: Professional networking platform API
 - **DuckDuckGo**: Search engine for web research
-- **OpenAI GPT-4**: AI language model for query processing and verification
+- **OpenAI GPT-4o-mini**: AI language model for query processing and verification
 - **Requests**: HTTP library for Python
 - **OpenAI**: Python client for OpenAI API
 - **Celery**: Distributed task queue for asynchronous processing
@@ -681,6 +1015,121 @@ flowchart TD
 - **Docker**: Containerization platform for packaging applications
 - **Git**: Version control system
 - **Mermaid & PlantUML**: Text-based diagramming tools for creating flowcharts, sequence diagrams, class diagrams, and state diagrams
-- **SQLite/PostgreSQL**: Database systems (SQLite for development, PostgreSQL for production)
+- **MySQL**: Primary database system (Aiven Cloud MySQL for both development and production)
 
 
+## Deployment Architecture
+We utilized **Render** for the deployment of the backend and **Vercel** for hosting the frontend. The database was hosted on **AWS** which is managed by **Aiven**
+
+```plantuml
+@startuml Deployment Diagram
+
+title Alumni Tracking System - Production Deployment Architecture
+
+skinparam backgroundColor #FEFEFE
+skinparam componentStyle uml2
+skinparam packageStyle rect
+
+' Color scheme
+skinparam package<<Development>> {
+    backgroundColor #E3F2FD
+    borderColor #1976D2
+}
+skinparam package<<Production>> {
+    backgroundColor #E8F5E8
+    borderColor #388E3C
+}
+skinparam package<<Infrastructure>> {
+    backgroundColor #F3E5F5
+    borderColor #7B1FA2
+}
+skinparam package<<External>> {
+    backgroundColor #FFEBEE
+    borderColor #D32F2F
+}
+
+' Actors
+actor "Developer" as Dev #1976D2
+actor "End User" as User #388E3C
+
+' Development Environment
+package "Development" <<Development>> as DevEnv {
+    node "Local" as Local #E3F2FD {
+        database "SQLite" as LocalDB #E3F2FD
+        [React Dev\n<b>port:3000] as DevFrontend #E3F2FD
+        [FastAPI Dev\n<b>port:8000] as DevBackend #E3F2FD
+    }
+}
+
+' Version Control & CI/CD
+package "CI/CD" <<Infrastructure>> as VC {
+    node "GitHub" as GitHub #F3E5F5 {
+        artifact "Code" as Code #F3E5F5
+        component "Actions" as CI_CD #F3E5F5
+    }
+}
+
+' Production Frontend
+package "Frontend" <<Production>> as FrontendDeploy {
+    cloud "Vercel" as Vercel #E8F5E8 {
+        [React App] as ProdFrontend #E8F5E8
+        component "CDN" as CDN #E8F5E8
+    }
+}
+
+' Production Backend
+package "Backend" <<Production>> as BackendDeploy {
+    cloud "Render" as Render #E8F5E8 {
+        [FastAPI] as ProdBackend #E8F5E8
+        database "Redis" as Redis #E8F5E8
+        component "LB" as LB #E8F5E8
+    }
+}
+
+' Database Infrastructure
+package "Database" <<Infrastructure>> as DataLayer {
+    cloud "Aiven" as Aiven #F3E5F5 {
+        database "MySQL 8.0\n<b>database" as MySQL #F3E5F5
+    }
+}
+
+' External Services
+package "External APIs" <<External>> as External {
+    cloud "OpenAI" as OpenAI #FFEBEE
+    cloud "DuckDuckGo" as DuckDuckGo #FFEBEE
+}
+
+' Positioning
+DataLayer -[hidden]d- BackendDeploy
+
+' Development Workflow
+Dev --> Local : Develop
+Local --> GitHub : Push
+
+' CI/CD Pipeline Flow
+GitHub --> CI_CD : Build
+CI_CD --> Vercel : Deploy FE
+CI_CD --> Render : Deploy BE
+
+' Production Data Flow
+User --> ProdFrontend : HTTPS
+ProdFrontend --> CDN : Assets
+ProdFrontend --> LB : APIs
+LB --> ProdBackend : Route
+ProdBackend --> Redis : Cache
+ProdBackend --> MySQL : DB
+
+' External API Integrations
+ProdBackend --> OpenAI : AI
+ProdBackend --> DuckDuckGo : Search
+
+legend right
+    |= Type |= Color |
+    | Development | <back:#E3F2FD><color:#1976D2>Blue</color></back> |
+    | Production | <back:#E8F5E8><color:#388E3C>Green</color></back> |
+    | Infrastructure | <back:#F3E5F5><color:#7B1FA2>Purple</color></back> |
+    | External | <back:#FFEBEE><color:#D32F2F>Red</color></back> |
+endlegend
+
+@enduml
+```
