@@ -77,10 +77,10 @@ class ExportService:
                 'Graduation Year': profile.graduation_year,
                 'Current Job Title': current_job.title if current_job else '',
                 'Current Company': current_job.company if current_job else '',
-                'Current Industry': current_job.industry.value if current_job and current_job.industry else '',
+                'Current Industry': current_job.industry if current_job and current_job.industry else '',
                 'Location': profile.location or '',
                 'LinkedIn URL': profile.linkedin_url or '',
-                'Industry': profile.industry.value if profile.industry else '',
+                'Industry': profile.industry if profile.industry else '',
                 'Confidence Score': profile.confidence_score,
                 'Last Updated': profile.last_updated.strftime('%Y-%m-%d %H:%M:%S') if profile.last_updated else '',
                 'Total Jobs': len(profile.work_history),
@@ -101,7 +101,7 @@ class ExportService:
                     'Alumni Name': profile.full_name,
                     'Job Title': job.title,
                     'Company': job.company,
-                    'Industry': job.industry.value if job.industry else '',
+                    'Industry': job.industry if job.industry else '',
                     'Start Date': job.start_date.strftime('%Y-%m-%d') if job.start_date else '',
                     'End Date': job.end_date.strftime('%Y-%m-%d') if job.end_date else '',
                     'Is Current': 'Yes' if job.is_current else 'No',
@@ -126,7 +126,7 @@ class ExportService:
         for profile in alumni_profiles:
             # Count industries
             if profile.industry:
-                industry_counts[profile.industry.value] = industry_counts.get(profile.industry.value, 0) + 1
+                industry_counts[profile.industry] = industry_counts.get(profile.industry, 0) + 1
             
             # Count companies (current job)
             current_job = profile.get_current_job()
@@ -212,7 +212,7 @@ class ExportService:
         filtered = alumni_profiles
         
         if filters.get('industry'):
-            filtered = [p for p in filtered if p.industry and p.industry.value == filters['industry']]
+            filtered = [p for p in filtered if p.industry and p.industry == filters['industry']]
         
         if filters.get('graduation_year_min'):
             filtered = [p for p in filtered if p.graduation_year and p.graduation_year >= filters['graduation_year_min']]

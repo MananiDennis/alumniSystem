@@ -38,6 +38,8 @@ import {
   Pending,
   Upload,
   Description,
+  ContentCopy,
+  Visibility,
 } from "@mui/icons-material";
 import axios from "axios";
 import { api } from "../utils/api";
@@ -81,6 +83,9 @@ export default function DataCollection({ token }) {
   const [fileUploadOpen, setFileUploadOpen] = useState(false);
   const [selectedFile, setSelectedFile] = useState(null);
   const [uploadLoading, setUploadLoading] = useState(false);
+  const [failedNamesDialogOpen, setFailedNamesDialogOpen] = useState(false);
+  const [selectedFailedNames, setSelectedFailedNames] = useState([]);
+  const [copySuccess, setCopySuccess] = useState(false);
 
   // Manual form state
   const [manualForm, setManualForm] = useState({
@@ -246,6 +251,47 @@ export default function DataCollection({ token }) {
     }
   };
 
+  const handleViewFailedNames = (failedNames) => {
+    setSelectedFailedNames(failedNames);
+    setFailedNamesDialogOpen(true);
+  };
+
+  const handleCopyFailedNames = async () => {
+    try {
+      const namesText = selectedFailedNames
+        .map((item) => {
+          if (typeof item === "string") {
+            return item; // Legacy format
+          }
+          return `${item.name} (${item.reason})`;
+        })
+        .join("\n");
+
+      await navigator.clipboard.writeText(namesText);
+      setCopySuccess(true);
+      setTimeout(() => setCopySuccess(false), 2000);
+    } catch (err) {
+      console.error("Failed to copy to clipboard:", err);
+      // Fallback for older browsers
+      const textArea = document.createElement("textarea");
+      const namesText = selectedFailedNames
+        .map((item) => {
+          if (typeof item === "string") {
+            return item;
+          }
+          return `${item.name} (${item.reason})`;
+        })
+        .join("\n");
+      textArea.value = namesText;
+      document.body.appendChild(textArea);
+      textArea.select();
+      document.execCommand("copy");
+      document.body.removeChild(textArea);
+      setCopySuccess(true);
+      setTimeout(() => setCopySuccess(false), 2000);
+    }
+  };
+
   const startCollection = async () => {
     const validNames = names.filter((name) => name.trim());
     if (validNames.length === 0) {
@@ -306,6 +352,7 @@ export default function DataCollection({ token }) {
                 ...task,
                 status: response.data.status,
                 results: response.data.results_count || task.results,
+                failed_names: response.data.failed_names || [],
               }
             : task
         )
@@ -602,19 +649,74 @@ export default function DataCollection({ token }) {
                                   sx={{ ml: 1, height: 20 }}
                                 />
                               )}
-                              {task.results && (
+                              {task.results !== undefined && (
                                 <Typography
                                   variant="caption"
                                   sx={{ display: "block", mt: 0.5 }}
                                 >
                                   {task.results} profiles collected
+                                  {task.failed_names &&
+                                    task.failed_names.length > 0 && (
+                                      <span style={{ color: "#dc2626" }}>
+                                        {" • "}
+                                        {task.failed_names.length} failed
+                                      </span>
+                                    )}
                                 </Typography>
                               )}
                             </Box>
                           }
                         />
                         <ListItemSecondaryAction>
-                          <TaskStatusChip status={task.status} />
+                          <Box
+                            sx={{
+                              display: "flex",
+                              alignItems: "center",
+                              gap: 1,
+                            }}
+                          >
+                            {task.failed_names &&
+                              task.failed_names.length > 0 &&
+                              task.status === "completed" && (
+                                <Box sx={{ display: "flex", gap: 1 }}>
+                                  <Button
+                                    size="small"
+                                    variant="outlined"
+                                    color="info"
+                                    startIcon={<Visibility />}
+                                    onClick={() =>
+                                      handleViewFailedNames(task.failed_names)
+                                    }
+                                    sx={{ fontSize: "0.7rem", px: 1, py: 0.5 }}
+                                  >
+                                    View Failed
+                                  </Button>
+                                  <Button
+                                    size="small"
+                                    variant="outlined"
+                                    color="warning"
+                                    onClick={() => {
+                                      // Switch to manual entry tab and pre-fill failed names
+                                      setTabValue(1);
+                                      const failedNamesOnly =
+                                        task.failed_names.map((item) =>
+                                          typeof item === "string"
+                                            ? item
+                                            : item.name
+                                        );
+                                      setNames(failedNamesOnly);
+                                      setSuccess(
+                                        `Switched to manual entry for ${failedNamesOnly.length} failed names`
+                                      );
+                                    }}
+                                    sx={{ fontSize: "0.7rem", px: 1, py: 0.5 }}
+                                  >
+                                    Manual Entry
+                                  </Button>
+                                </Box>
+                              )}
+                            <TaskStatusChip status={task.status} />
+                          </Box>
                         </ListItemSecondaryAction>
                       </ListItem>
                     ))}
@@ -1371,6 +1473,134 @@ export default function DataCollection({ token }) {
             }
           >
             {uploadLoading ? "Uploading..." : "Upload & Import"}
+          </Button>
+        </DialogActions>
+      </Dialog>
+      {/* Failed Names Dialog */}
+      <Dialog
+        open={failedNamesDialogOpen}
+        onClose={() => setFailedNamesDialogOpen(false)}
+        maxWidth="md"
+        fullWidth
+      >
+        <DialogTitle>
+          <Box
+            sx={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+            }}
+          >
+            <Box sx={{ display: "flex", alignItems: "center" }}>
+              <Error sx={{ mr: 1, color: "#dc2626" }} />
+              <Typography variant="h6">
+                Failed Names ({selectedFailedNames.length})
+              </Typography>
+            </Box>
+            <Button
+              variant="outlined"
+              startIcon={<ContentCopy />}
+              onClick={handleCopyFailedNames}
+              size="small"
+              color={copySuccess ? "success" : "primary"}
+              sx={{ borderRadius: 2 }}
+            >
+              {copySuccess ? "Copied!" : "Copy All"}
+            </Button>
+          </Box>
+        </DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" sx={{ color: "#64748b", mb: 3 }}>
+            These names could not be collected automatically. You can copy them
+            for manual entry or review the reasons for failure.
+          </Typography>
+
+          <Box sx={{ maxHeight: 400, overflow: "auto" }}>
+            {selectedFailedNames.map((item, index) => {
+              const name = typeof item === "string" ? item : item.name;
+              const reason =
+                typeof item === "string" ? "Collection failed" : item.reason;
+
+              return (
+                <Card key={index} sx={{ mb: 1, borderRadius: 2 }}>
+                  <CardContent sx={{ py: 2, px: 3 }}>
+                    <Box
+                      sx={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                      }}
+                    >
+                      <Box>
+                        <Typography variant="body1" sx={{ fontWeight: 600 }}>
+                          {name}
+                        </Typography>
+                        <Typography
+                          variant="body2"
+                          sx={{ color: "#64748b", mt: 0.5 }}
+                        >
+                          {reason}
+                        </Typography>
+                      </Box>
+                      <Button
+                        size="small"
+                        variant="outlined"
+                        startIcon={<ContentCopy />}
+                        onClick={async () => {
+                          try {
+                            await navigator.clipboard.writeText(name);
+                            setSuccess(`Copied "${name}" to clipboard`);
+                            setTimeout(() => setSuccess(""), 2000);
+                          } catch (err) {
+                            // Fallback
+                            const textArea = document.createElement("textarea");
+                            textArea.value = name;
+                            document.body.appendChild(textArea);
+                            textArea.select();
+                            document.execCommand("copy");
+                            document.body.removeChild(textArea);
+                            setSuccess(`Copied "${name}" to clipboard`);
+                            setTimeout(() => setSuccess(""), 2000);
+                          }
+                        }}
+                        sx={{ borderRadius: 2, ml: 2 }}
+                      >
+                        Copy
+                      </Button>
+                    </Box>
+                  </CardContent>
+                </Card>
+              );
+            })}
+          </Box>
+
+          {selectedFailedNames.length === 0 && (
+            <Typography
+              variant="body2"
+              sx={{ color: "#64748b", textAlign: "center", py: 4 }}
+            >
+              No failed names to display.
+            </Typography>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setFailedNamesDialogOpen(false)}>Close</Button>
+          <Button
+            variant="contained"
+            onClick={() => {
+              const failedNamesOnly = selectedFailedNames.map((item) =>
+                typeof item === "string" ? item : item.name
+              );
+              setTabValue(1);
+              setNames(failedNamesOnly);
+              setFailedNamesDialogOpen(false);
+              setSuccess(
+                `Switched to manual entry for ${failedNamesOnly.length} failed names`
+              );
+            }}
+            sx={{ borderRadius: 2 }}
+          >
+            Manual Entry
           </Button>
         </DialogActions>
       </Dialog>

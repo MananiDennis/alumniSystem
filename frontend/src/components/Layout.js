@@ -19,7 +19,6 @@ import {
   People,
   DataUsage,
   Analytics,
-  Settings,
   Menu as MenuIcon,
   Logout,
 } from "@mui/icons-material";
@@ -34,7 +33,6 @@ const Layout = ({ children, user, onLogout, currentPage, onPageChange }) => {
     { text: "Alumni", icon: <People />, id: "alumni" },
     { text: "Data Collection", icon: <DataUsage />, id: "collection" },
     { text: "AI Analytics", icon: <Analytics />, id: "analytics" },
-    { text: "Settings", icon: <Settings />, id: "settings" },
   ];
 
   const drawer = (

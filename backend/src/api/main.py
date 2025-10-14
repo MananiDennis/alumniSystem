@@ -9,6 +9,7 @@ import jwt
 import uuid
 from datetime import datetime, timedelta
 from threading import Lock
+import json
 
 from src.services.search_service import SearchService
 from src.services.alumni_collector import AlumniCollector
@@ -19,6 +20,8 @@ from src.models.alumni import AlumniProfile
 from src.models.user import User
 from src.database.connection import db_manager
 from src.config.settings import settings
+from src.database.models import TaskDB
+from src.api.utils import format_alumni
 
 # Import modular routers
 from src.api import auth as auth_router
@@ -31,9 +34,71 @@ from src.api import export as export_router
 from src.api import health as health_router
 
 
-# Task management for background collection
-task_store: Dict[str, Dict[str, Any]] = {}
-task_lock = Lock()
+# Task management for background collection (now database-backed)
+# task_store: Dict[str, Dict[str, Any]] = {}
+# task_lock = Lock()
+
+def save_task_to_db(task_id: str, task_data: Dict[str, Any]):
+    """Save task to database for persistence"""
+    try:
+        session = db_manager.get_session()
+        # Check if task already exists
+        existing = session.query(TaskDB).filter(TaskDB.id == task_id).first()
+        
+        if existing:
+            # Update existing task
+            existing.status = task_data.get('status', 'running')
+            existing.results_count = task_data.get('results_count', 0)
+            existing.results = json.dumps(task_data.get('results', []))
+            existing.failed_names = json.dumps(task_data.get('failed_names', []))
+            existing.error = task_data.get('error')
+            if task_data.get('end_time'):
+                existing.end_time = task_data['end_time']
+        else:
+            # Create new task
+            task_db = TaskDB(
+                id=task_id,
+                status=task_data.get('status', 'running'),
+                names=json.dumps(task_data.get('names', [])),
+                method=task_data.get('method', 'web-research'),
+                start_time=task_data.get('start_time'),
+                results_count=task_data.get('results_count', 0),
+                results=json.dumps(task_data.get('results', [])),
+                failed_names=json.dumps(task_data.get('failed_names', [])),
+                error=task_data.get('error')
+            )
+            session.add(task_db)
+        
+        session.commit()
+        session.close()
+    except Exception as e:
+        print(f"DEBUG: Failed to save task to database: {e}")
+
+def load_task_from_db(task_id: str) -> Optional[Dict[str, Any]]:
+    """Load task from database"""
+    try:
+        session = db_manager.get_session()
+        task_db = session.query(TaskDB).filter(TaskDB.id == task_id).first()
+        session.close()
+        
+        if task_db:
+            task_data = {
+                'id': task_db.id,
+                'status': task_db.status,
+                'names': json.loads(task_db.names) if task_db.names else [],
+                'method': task_db.method,
+                'start_time': task_db.start_time,
+                'results_count': task_db.results_count,
+                'results': json.loads(task_db.results) if task_db.results else [],
+                'failed_names': json.loads(task_db.failed_names) if task_db.failed_names else [],
+                'error': task_db.error,
+                'end_time': task_db.end_time
+            }
+            return task_data
+        return None
+    except Exception as e:
+        print(f"DEBUG: Failed to load task from database: {e}")
+        return None
 
 app = FastAPI(title="Alumni Tracking API", version="1.0.0")
 # CORS for frontend
@@ -99,7 +164,7 @@ def home():
 # Include modular routers
 app.include_router(auth_router.router)
 app.include_router(alumni_router.router)
-app.include_router(collection_router.router)
+# app.include_router(collection_router.router)  # Using database version in main.py instead
 app.include_router(upload_router.router)
 app.include_router(query_router.router)
 app.include_router(stats_router.router)
@@ -318,16 +383,18 @@ def collect_alumni(request: CollectRequest, background_tasks: BackgroundTasks, u
     task_id = str(uuid.uuid4())
     
     # Initialize task
-    with task_lock:
-        task_store[task_id] = {
-            "status": "running",
-            "names": request.names,
-            "method": "web-research" if request.use_web_research else "brightdata",
-            "start_time": datetime.utcnow(),
-            "results_count": 0,
-            "results": [],
-            "error": None
-        }
+    task_data = {
+        "status": "running",
+        "names": request.names,
+        "method": "web-research" if request.use_web_research else "brightdata",
+        "start_time": datetime.utcnow(),
+        "results_count": 0,
+        "results": [],
+        "failed_names": [],
+        "error": None
+    }
+    
+    save_task_to_db(task_id, task_data)
     
     # Start background collection
     background_tasks.add_task(run_collection_task, task_id, request.names, request.use_web_research)
@@ -344,32 +411,60 @@ def run_collection_task(task_id: str, names: List[str], use_web_research: bool):
     try:
         collector = AlumniCollector()
         method = "web-research" if use_web_research else "brightdata"
-        profiles = collector.collect_alumni(names, method=method)
         
-        # Update task with results
-        with task_lock:
-            if len(profiles) == 0:
-                task_store[task_id].update({
-                    "status": "failed",
-                    "error": "No alumni profiles were collected. This may be due to low confidence scores or no matching information found.",
-                    "end_time": datetime.utcnow()
-                })
-            else:
-                task_store[task_id].update({
-                    "status": "completed",
-                    "results_count": len(profiles),
-                    "results": [format_alumni(p) for p in profiles],
-                    "end_time": datetime.utcnow()
-                })
+        successful_profiles = []
+        failed_names = []
+        
+        # Process each name individually and update task incrementally
+        for i, name in enumerate(names):
+            try:
+                # Collect for this single name
+                result = collector.collect_alumni([name], method=method)
+                
+                single_successful = result.get("successful_profiles", [])
+                single_failed = result.get("failed_names", [])
+                
+                if single_successful:
+                    successful_profiles.extend(single_successful)
+                if single_failed:
+                    failed_names.extend(single_failed)
+                
+                # Update task with current progress
+                task_update = {
+                    "results_count": len(successful_profiles),
+                    "results": [format_alumni(p) for p in successful_profiles],
+                    "failed_names": failed_names
+                }
+                save_task_to_db(task_id, task_update)
+                
+            except Exception as e:
+                # If single name collection fails, add to failed names
+                failed_names.append({"name": name, "reason": f"Unexpected error: {str(e)}"})
+                # Continue with next name
+        
+        # Final update with completion status - always completed, even if no results
+        task_update = {
+            "status": "completed",
+            "results_count": len(successful_profiles),
+            "results": [format_alumni(p) for p in successful_profiles],
+            "failed_names": failed_names,
+            "end_time": datetime.utcnow()
+        }
+        
+        # Add error message if no successful profiles
+        if len(successful_profiles) == 0:
+            task_update["error"] = "No valid alumni profiles were found. Check failed names for details."
+        
+        save_task_to_db(task_id, task_update)
             
     except Exception as e:
         # Update task with error
-        with task_lock:
-            task_store[task_id].update({
-                "status": "failed",
-                "error": str(e),
-                "end_time": datetime.utcnow()
-            })
+        task_update = {
+            "status": "failed",
+            "error": str(e),
+            "end_time": datetime.utcnow()
+        }
+        save_task_to_db(task_id, task_update)
     finally:
         if collector:
             collector.close()
@@ -377,8 +472,7 @@ def run_collection_task(task_id: str, names: List[str], use_web_research: bool):
 @app.get("/collect/status/{task_id}")
 def get_collect_status(task_id: str, user_email: str = Depends(verify_token)):
     """Get collection task status"""
-    with task_lock:
-        task = task_store.get(task_id)
+    task = load_task_from_db(task_id)
     
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
@@ -388,9 +482,28 @@ def get_collect_status(task_id: str, user_email: str = Depends(verify_token)):
         "status": task["status"],
         "results_count": task.get("results_count", 0),
         "results": task.get("results", []),
+        "failed_names": task.get("failed_names", []),
         "error": task.get("error"),
         "start_time": task.get("start_time").isoformat() if task.get("start_time") else None,
         "end_time": task.get("end_time").isoformat() if task.get("end_time") else None
+    }
+
+@app.get("/collect/failed/{task_id}")
+def get_failed_names(task_id: str, user_email: str = Depends(verify_token)):
+    """Get failed names from a collection task for manual entry"""
+    task = load_task_from_db(task_id)
+    
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+
+    if task["status"] not in ["completed", "failed"]:
+        raise HTTPException(status_code=400, detail="Task is still running")
+
+    failed_names = task.get("failed_names", [])
+    return {
+        "task_id": task_id,
+        "failed_names": failed_names,
+        "count": len(failed_names)
     }
 
 @app.post("/manual-collect")
@@ -753,7 +866,23 @@ def get_recent_alumni(limit: int = 10):
     try:
         all_alumni = search_service.repository.get_all_alumni()
         recent = sorted(all_alumni, key=lambda x: x.last_updated, reverse=True)[:limit]
-        return [format_alumni(alumni) for alumni in recent]
+        formatted = []
+        for alumni in recent:
+            try:
+                formatted_alumni = format_alumni(alumni)
+                formatted.append(formatted_alumni)
+            except Exception as e:
+                print(f"ERROR formatting alumni {alumni.id}: {e}")
+                # Fallback to basic format
+                formatted.append({
+                    "id": alumni.id,
+                    "name": alumni.full_name,
+                    "last_updated": alumni.last_updated.isoformat() if alumni.last_updated else None
+                })
+        print(f"DEBUG: /recent returning {len(formatted)} alumni")
+        if formatted:
+            print(f"DEBUG: First alumni keys: {list(formatted[0].keys())}")
+        return formatted
     finally:
         search_service.close()
 
@@ -778,30 +907,7 @@ def health_check():
 
 
 # --- Helper ---
-def format_alumni(alumni) -> dict:
-    """Format alumni profile for API response"""
-    # Handle both SQLAlchemy models and dataclasses
-    if hasattr(alumni, 'current_job_title'):  # SQLAlchemy model
-        job = {
-            "title": alumni.current_job_title,
-            "company": alumni.current_company
-        } if alumni.current_job_title else None
-    else:  # Dataclass
-        job = alumni.get_current_job()
-        job = {"title": job.title, "company": job.company} if job else None
-    
-    return {
-        "id": alumni.id,
-        "name": getattr(alumni, 'full_name', alumni.full_name),
-        "graduation_year": getattr(alumni, 'graduation_year', alumni.graduation_year),
-        "location": getattr(alumni, 'location', alumni.location),
-        "industry": getattr(alumni, 'industry', alumni.industry),
-        "linkedin_url": getattr(alumni, 'linkedin_url', alumni.linkedin_url),
-        "confidence_score": getattr(alumni, 'confidence_score', alumni.confidence_score),
-        "current_job": job,
-        "work_history_count": len(getattr(alumni, 'work_history', alumni.work_history)),
-        "last_updated": alumni.last_updated.isoformat() if hasattr(alumni, 'last_updated') and alumni.last_updated else getattr(alumni, 'last_updated', None)
-    }
+# format_alumni function imported from src.api.utils
 
     # NOTE: Application is launched via `backend/main.py`.
     # The previous `if __name__ == '__main__'` block was removed to avoid

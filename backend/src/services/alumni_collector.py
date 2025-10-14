@@ -38,12 +38,18 @@ class AlumniCollector:
             format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
         )
     
-    def collect_alumni(self, names: List[str], method: str = "web-research") -> List[AlumniProfile]:
-        """Main collection method - uses web research by default"""
+    def collect_alumni(self, names: List[str], method: str = "web-research") -> Dict[str, Any]:
+        """Main collection method - uses web research by default
+        
+        Returns:
+            Dict with 'successful_profiles' and 'failed_names' keys
+        """
         if method == "manual":
-            return self.collect_data_manually(names)
+            profiles = self.collect_data_manually(names)
+            return {"successful_profiles": profiles, "failed_names": []}
         # elif method == "brightdata":
-        #     return self.collect_automated(names)
+        #     profiles = self.collect_automated(names)
+        #     return {"successful_profiles": profiles, "failed_names": []}
         elif method == "web-research":
             return self.collect_web_research(names)
         # else:
@@ -102,14 +108,19 @@ class AlumniCollector:
     # 
     #     return collected_profiles
     
-    def collect_web_research(self, names: List[str]) -> List[AlumniProfile]:
-        """Collect alumni data using web research + AI structuring"""
+    def collect_web_research(self, names: List[str]) -> Dict[str, Any]:
+        """Collect alumni data using web research + AI structuring
+        
+        Returns:
+            Dict with 'successful_profiles' and 'failed_names' keys
+        """
         self.logger.info(f"Starting web research collection for {len(names)} alumni")
         
         from src.services.web_research_service import WebResearchService
         
         web_service = WebResearchService()
         collected_profiles = []
+        failed_names = []
         
         for name in names:
             try:
@@ -120,6 +131,7 @@ class AlumniCollector:
                 
                 if not web_results:
                     self.logger.warning(f"No web results found for {name}")
+                    failed_names.append({"name": name, "reason": "No web search results found"})
                     continue
                 
                 # Use AI to convert unstructured data to structured profile
@@ -135,15 +147,22 @@ class AlumniCollector:
                         collected_profiles.append(saved_profile)
                         self.logger.info(f"✓ Saved web research profile for {name}")
                     else:
-                        self.logger.warning(f"AI conversion failed for {name}")
+                        self.logger.info(f"No relevant professional information found for {name}")
+                        failed_names.append({"name": name, "reason": "No relevant professional information found"})
                 else:
                     self.logger.warning("AI service not available for web data conversion")
+                    failed_names.append({"name": name, "reason": "AI service not available"})
                     
             except Exception as e:
                 self.logger.error(f"Error in web research for {name}: {e}")
+                failed_names.append({"name": name, "reason": f"Error during collection: {str(e)}"})
                 continue
         
-        return collected_profiles
+        self.logger.info(f"Web research collection completed: {len(collected_profiles)} successful, {len(failed_names)} failed")
+        return {
+            "successful_profiles": collected_profiles,
+            "failed_names": failed_names
+        }
     
     def collect_data_manually(self, names: List[str]) -> List[AlumniProfile]:
         """Manual collection through user input"""

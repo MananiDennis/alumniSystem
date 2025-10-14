@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from openai import OpenAI
 from src.config.settings import settings
 import logging
-from src.models.alumni import IndustryType
+from src.models.alumni import IndustryType, AlumniProfile, JobPosition, Education, DataSource
 
 
 @dataclass
@@ -26,79 +26,79 @@ class AIVerificationService:
             self.client = None
         self.logger = logging.getLogger(__name__)
     
-    def normalize_industry(self, industry_str: Optional[str]) -> Optional[IndustryType]:
-        """Normalize industry string to IndustryType enum"""
+    def normalize_industry(self, industry_str: Optional[str]) -> Optional[str]:
+        """Normalize industry string to IndustryType enum value (string)"""
         if not industry_str:
             return None
         
         # Clean and normalize the industry string
         normalized = industry_str.strip().lower()
         
-        # Map common industry names to IndustryType enum
+        # Map common industry names to IndustryType enum values
         industry_mapping = {
             # Technology
-            'technology': IndustryType.TECHNOLOGY,
-            'information technology': IndustryType.TECHNOLOGY,
-            'software': IndustryType.TECHNOLOGY,
-            'it': IndustryType.TECHNOLOGY,
-            'computer': IndustryType.TECHNOLOGY,
-            'tech': IndustryType.TECHNOLOGY,
-            'engineering': IndustryType.TECHNOLOGY,
-            'data': IndustryType.TECHNOLOGY,
-            'ai': IndustryType.TECHNOLOGY,
-            'artificial intelligence': IndustryType.TECHNOLOGY,
+            'technology': IndustryType.TECHNOLOGY.value,
+            'information technology': IndustryType.TECHNOLOGY.value,
+            'software': IndustryType.TECHNOLOGY.value,
+            'it': IndustryType.TECHNOLOGY.value,
+            'computer': IndustryType.TECHNOLOGY.value,
+            'tech': IndustryType.TECHNOLOGY.value,
+            'engineering': IndustryType.TECHNOLOGY.value,
+            'data': IndustryType.TECHNOLOGY.value,
+            'ai': IndustryType.TECHNOLOGY.value,
+            'artificial intelligence': IndustryType.TECHNOLOGY.value,
             
             # Finance
-            'finance': IndustryType.FINANCE,
-            'financial': IndustryType.FINANCE,
-            'banking': IndustryType.FINANCE,
-            'investment': IndustryType.FINANCE,
-            'accounting': IndustryType.FINANCE,
+            'finance': IndustryType.FINANCE.value,
+            'financial': IndustryType.FINANCE.value,
+            'banking': IndustryType.FINANCE.value,
+            'investment': IndustryType.FINANCE.value,
+            'accounting': IndustryType.FINANCE.value,
             
             # Healthcare
-            'healthcare': IndustryType.HEALTHCARE,
-            'health': IndustryType.HEALTHCARE,
-            'medical': IndustryType.HEALTHCARE,
-            'pharmaceutical': IndustryType.HEALTHCARE,
-            'biotech': IndustryType.HEALTHCARE,
+            'healthcare': IndustryType.HEALTHCARE.value,
+            'health': IndustryType.HEALTHCARE.value,
+            'medical': IndustryType.HEALTHCARE.value,
+            'pharmaceutical': IndustryType.HEALTHCARE.value,
+            'biotech': IndustryType.HEALTHCARE.value,
             
             # Education
-            'education': IndustryType.EDUCATION,
-            'academic': IndustryType.EDUCATION,
-            'teaching': IndustryType.EDUCATION,
-            'university': IndustryType.EDUCATION,
-            'school': IndustryType.EDUCATION,
+            'education': IndustryType.EDUCATION.value,
+            'academic': IndustryType.EDUCATION.value,
+            'teaching': IndustryType.EDUCATION.value,
+            'university': IndustryType.EDUCATION.value,
+            'school': IndustryType.EDUCATION.value,
             
             # Consulting
-            'consulting': IndustryType.CONSULTING,
-            'consultant': IndustryType.CONSULTING,
-            'advisory': IndustryType.CONSULTING,
+            'consulting': IndustryType.CONSULTING.value,
+            'consultant': IndustryType.CONSULTING.value,
+            'advisory': IndustryType.CONSULTING.value,
             
             # Mining
-            'mining': IndustryType.MINING,
-            'resources': IndustryType.MINING,
-            'energy': IndustryType.MINING,
+            'mining': IndustryType.MINING.value,
+            'resources': IndustryType.MINING.value,
+            'energy': IndustryType.MINING.value,
             
             # Government
-            'government': IndustryType.GOVERNMENT,
-            'public sector': IndustryType.GOVERNMENT,
-            'military': IndustryType.GOVERNMENT,
+            'government': IndustryType.GOVERNMENT.value,
+            'public sector': IndustryType.GOVERNMENT.value,
+            'military': IndustryType.GOVERNMENT.value,
             
             # Non-Profit
-            'non-profit': IndustryType.NON_PROFIT,
-            'nonprofit': IndustryType.NON_PROFIT,
-            'charity': IndustryType.NON_PROFIT,
-            'ngo': IndustryType.NON_PROFIT,
+            'non-profit': IndustryType.NON_PROFIT.value,
+            'nonprofit': IndustryType.NON_PROFIT.value,
+            'charity': IndustryType.NON_PROFIT.value,
+            'ngo': IndustryType.NON_PROFIT.value,
             
             # Retail
-            'retail': IndustryType.RETAIL,
-            'sales': IndustryType.RETAIL,
-            'marketing': IndustryType.RETAIL,
+            'retail': IndustryType.RETAIL.value,
+            'sales': IndustryType.RETAIL.value,
+            'marketing': IndustryType.RETAIL.value,
             
             # Manufacturing
-            'manufacturing': IndustryType.MANUFACTURING,
-            'production': IndustryType.MANUFACTURING,
-            'industrial': IndustryType.MANUFACTURING,
+            'manufacturing': IndustryType.MANUFACTURING.value,
+            'production': IndustryType.MANUFACTURING.value,
+            'industrial': IndustryType.MANUFACTURING.value,
         }
         
         # Try exact match first
@@ -111,7 +111,7 @@ class AIVerificationService:
                 return value
         
         # Default to OTHER for unknown industries
-        return IndustryType.OTHER
+        return IndustryType.OTHER.value
     
     def verify_profile_match(self, 
                            target_name: str,
@@ -362,40 +362,74 @@ Respond with enhanced data in JSON format:
             prompt = f"""
             Analyze the following web search results for "{target_name}" and extract structured alumni information.
             
+            This system collects Edith Cowan University (ECU) alumni profiles. ECU is located in Perth, Western Australia.
+            Look for indicators that suggest this person may be an ECU alumnus, even if ECU is not explicitly mentioned.
+            
             Web Search Results:
             {web_content}
             
-            Based on this web data, create a structured alumni profile. Focus on:
-            1. Professional information (current job, company, industry)
-            2. Education information (university, graduation year if mentioned)
+            ECU Alumni Indicators to consider:
+            - Explicit mention of Edith Cowan University or ECU
+            - Location in Perth, Western Australia, or other Australian locations
+            - Career progression typical of Australian university graduates
+            - Education timeline that could align with ECU attendance (university-level education)
+            - Professional experience in industries common among ECU graduates
+            - Australian business connections or experience
+            
+            Based on this web data, create a structured alumni profile if the person appears to be a legitimate professional.
+            Focus on:
+            1. Professional information (current job, company, industry, work history)
+            2. Education information (universities, degrees, graduation years, fields of study)
             3. Location information
             4. LinkedIn or professional profiles
             5. Career progression
             
             IMPORTANT: Respond with ONLY a valid JSON object. Do not include any explanatory text.
             
+            Available Industry Types: {', '.join([e.value for e in IndustryType])} 
+            
             JSON Format (copy this exact structure):
             {{
                 "full_name": "extracted full name or null",
                 "graduation_year": graduation_year_as_integer_or_null,
                 "location": "location string or null",
-                "industry": "industry name or null",
+                "industry": "ONE OF: {', '.join([e.value for e in IndustryType])} or null",
                 "linkedin_url": "linkedin URL or null",
                 "confidence_score": confidence_score_between_0_and_1,
-                "current_job_title": "job title or null",
-                "current_company": "company name or null",
-                "current_job_industry": "industry name or null",
-                "university": "university name or null",
-                "degree": "degree type or null",
+                "work_history": [
+                    {{
+                        "title": "job title",
+                        "company": "company name", 
+                        "start_year": start_year_as_integer_or_null,
+                        "end_year": end_year_as_integer_or_null,
+                        "is_current": true_or_false,
+                        "industry": "ONE OF: {', '.join([e.value for e in IndustryType])} or null",
+                        "location": "job location or null"
+                    }}
+                ],
+                "education_history": [
+                    {{
+                        "institution": "university/school name",
+                        "degree": "degree type (e.g., Bachelor, Master, PhD) or null",
+                        "field_of_study": "field/major or null",
+                        "graduation_year": graduation_year_as_integer_or_null,
+                        "start_year": start_year_as_integer_or_null
+                    }}
+                ],
                 "data_source_url": "best source URL or null"
             }}
             
             Rules:
-            - If no relevant information found, return null
-            - Be conservative with confidence scores (0.8+ only for clear matches)
-            - graduation_year must be an integer or null
+            - If no relevant professional information found, return null
+            - Be reasonable with confidence scores (0.6+ for good matches, 0.8+ for strong matches)
+            - graduation_year and years must be integers or null
             - confidence_score must be between 0.0 and 1.0
+            - work_history and education_history should be arrays (empty arrays if no data)
+            - For current job, set is_current: true and end_year: null
             - Use null for missing information
+            - Industry must be one of the available industry types listed above
+            - Only include information clearly supported by the web results
+            - Prioritize Australian connections and professional experience
             """
             
             self.logger.debug("Calling OpenAI API for web data conversion")
@@ -423,6 +457,16 @@ Respond with enhanced data in JSON format:
                 self.logger.info(f"AI returned null for {target_name} - no relevant information found")
                 return None
                 
+            # Strip markdown code block formatting if present
+            if result_text.startswith('```json'):
+                result_text = result_text[7:]  # Remove ```json
+            if result_text.startswith('```'):
+                result_text = result_text[3:]  # Remove ```
+            if result_text.endswith('```'):
+                result_text = result_text[:-3]  # Remove trailing ```
+            
+            result_text = result_text.strip()
+            
             # Parse JSON response
             self.logger.debug("Parsing AI response as JSON")
             try:
@@ -439,7 +483,7 @@ Respond with enhanced data in JSON format:
             
             self.logger.info(f"Successfully parsed profile data for {target_name}: {profile_data.get('full_name', 'Unknown')}")
             
-            # Check confidence threshold
+            # Check confidence threshold - lowered for more lenient collection
             confidence = profile_data.get("confidence_score", 0)
             if not isinstance(confidence, (int, float)) or confidence < 0.5:
                 self.logger.info(f"Confidence score {confidence} below threshold 0.5 or invalid, skipping profile for {target_name}")
@@ -451,23 +495,59 @@ Respond with enhanced data in JSON format:
                 return None
             
             # Convert to AlumniProfile object
-            from src.models.alumni import AlumniProfile, JobPosition, DataSource
+            from src.models.alumni import AlumniProfile, JobPosition, Education, DataSource
             
-            # Create current job if available
+            # Create work history from the array
             work_history = []
             current_job = None
-            if profile_data.get("current_job_title") and profile_data.get("current_company"):
-                current_job = JobPosition(
-                    title=profile_data.get("current_job_title", ""),
-                    company=profile_data.get("current_company", ""),
-                    start_date=None,
-                    end_date=None,
-                    is_current=True,
-                    industry=self.normalize_industry(profile_data.get("current_job_industry")),
-                    location=profile_data.get("location")
-                )
-                work_history.append(current_job)
-                self.logger.debug(f"Created current job: {current_job.title} at {current_job.company}")
+            if profile_data.get("work_history"):
+                for job_data in profile_data["work_history"]:
+                    try:
+                        # Convert year integers to date objects (using January 1st of the year)
+                        start_date = None
+                        end_date = None
+                        if job_data.get("start_year"):
+                            start_date = date(job_data["start_year"], 1, 1)
+                        if job_data.get("end_year"):
+                            end_date = date(job_data["end_year"], 1, 1)
+                        
+                        job = JobPosition(
+                            title=job_data.get("title", ""),
+                            company=job_data.get("company", ""),
+                            start_date=start_date,
+                            end_date=end_date,
+                            is_current=job_data.get("is_current", False),
+                            industry=self.normalize_industry(job_data.get("industry")),
+                            location=job_data.get("location")
+                        )
+                        work_history.append(job)
+                        
+                        # Set current job reference
+                        if job.is_current:
+                            current_job = job
+                            
+                        self.logger.debug(f"Created job: {job.title} at {job.company}")
+                    except Exception as e:
+                        self.logger.warning(f"Failed to create job from data {job_data}: {e}")
+                        continue
+            
+            # Create education history from the array
+            education_history = []
+            if profile_data.get("education_history"):
+                for edu_data in profile_data["education_history"]:
+                    try:
+                        education = Education(
+                            institution=edu_data.get("institution", ""),
+                            degree=edu_data.get("degree"),
+                            field_of_study=edu_data.get("field_of_study"),
+                            graduation_year=edu_data.get("graduation_year"),
+                            start_year=edu_data.get("start_year")
+                        )
+                        education_history.append(education)
+                        self.logger.debug(f"Created education: {education.degree} from {education.institution}")
+                    except Exception as e:
+                        self.logger.warning(f"Failed to create education from data {edu_data}: {e}")
+                        continue
             
             # Create data sources
             data_sources = []
@@ -482,7 +562,11 @@ Respond with enhanced data in JSON format:
             self.logger.debug(f"Created {len(data_sources)} data sources")
             
             # Determine industry (use current job industry or general industry)
-            industry = self.normalize_industry(profile_data.get("current_job_industry") or profile_data.get("industry"))
+            industry = None
+            if current_job and current_job.industry:
+                industry = current_job.industry
+            elif profile_data.get("industry"):
+                industry = self.normalize_industry(profile_data.get("industry"))
             self.logger.debug(f"Industry set to: {industry}")
             
             # Create the profile
@@ -496,11 +580,13 @@ Respond with enhanced data in JSON format:
                 data_sources=data_sources
             )
             
-            # Add work history
+            # Add work history and education history
             for job in work_history:
                 profile.add_job_position(job)
+            for education in education_history:
+                profile.add_education(education)
             
-            self.logger.info(f"Successfully created AlumniProfile for {target_name} with confidence {profile.confidence_score}")
+            self.logger.info(f"Successfully created AlumniProfile for {target_name} with confidence {profile.confidence_score}, {len(work_history)} jobs, {len(education_history)} education entries")
             return profile
             
         except json.JSONDecodeError as e:

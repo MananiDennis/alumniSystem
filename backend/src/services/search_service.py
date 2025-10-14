@@ -37,7 +37,7 @@ class SearchService:
         
         for alumni in all_alumni:
             if field == 'industry':
-                value = alumni.industry.value if alumni.industry else "Unknown"
+                value = alumni.industry if alumni.industry else "Unknown"
             elif field == 'location':
                 value = alumni.location or "Unknown"
             elif field == 'graduation_year':

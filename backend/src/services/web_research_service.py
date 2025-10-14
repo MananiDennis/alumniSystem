@@ -83,8 +83,8 @@ class WebResearchService:
             raise
     
     def search_person_web(self, name: str, additional_info: str = "") -> List[Dict[str, Any]]:
-        """Search for person information on the web with comprehensive fallbacks"""
-        logger.info(f"Starting enhanced web research for: {name}")
+        """Search for person information on the web using DuckDuckGo only"""
+        logger.info(f"Starting web research for: {name}")
         results = []
         
         # Generate multiple search queries with better targeting
@@ -92,26 +92,19 @@ class WebResearchService:
         
         logger.info(f"Generated {len(queries)} search queries: {queries}")
         
-        # Try each query with multiple search strategies
+        # Try each query with DuckDuckGo only
         for query in queries:
             try:
                 logger.debug(f"Executing search query: {query}")
                 
-                # Strategy 1: DuckDuckGo (primary)
+                # Only use DuckDuckGo - no fallbacks
                 search_results = self.duckduckgo_search(query)
                 if search_results:
                     logger.info(f"DuckDuckGo found {len(search_results)} results for '{query}'")
                     results.extend(search_results)
                     continue  # Move to next query if we got results
-                
-                # Strategy 2: Comprehensive fallback search
-                logger.info(f"DuckDuckGo failed for '{query}', trying comprehensive fallbacks...")
-                fallback_results = self.fallback_search(query)
-                if fallback_results:
-                    logger.info(f"Fallback search found {len(fallback_results)} results for '{query}'")
-                    results.extend(fallback_results)
                 else:
-                    logger.warning(f"All search strategies failed for '{query}'")
+                    logger.debug(f"DuckDuckGo found no results for '{query}'")
                 
                 time.sleep(2)  # Respectful delay between queries
                 
@@ -122,38 +115,6 @@ class WebResearchService:
                 
         logger.info(f"Total results collected for {name}: {len(results)}")
         return results[:10]  # Return top 10 results
-    
-    def fallback_search(self, query: str) -> List[Dict[str, Any]]:
-        """Comprehensive fallback search method with multiple strategies"""
-        logger.debug(f"Using comprehensive fallback search for query: {query}")
-        
-        # Strategy 1: Try Google Custom Search API (if API key available)
-        results = self._google_custom_search(query)
-        if results:
-            logger.info(f"Google Custom Search found {len(results)} results")
-            return results
-        
-        # Strategy 2: Try Bing Web Search API (if API key available)
-        results = self._bing_web_search(query)
-        if results:
-            logger.info(f"Bing Web Search found {len(results)} results")
-            return results
-        
-        # Strategy 3: Try Brave Search API (if API key available)
-        results = self._brave_search(query)
-        if results:
-            logger.info(f"Brave Search found {len(results)} results")
-            return results
-        
-        # Strategy 4: Direct site scraping (LinkedIn, company sites, etc.)
-        results = self._direct_site_search(query)
-        if results:
-            logger.info(f"Direct site search found {len(results)} results")
-            return results
-        
-        # No fallback results - return empty list
-        logger.warning(f"All search strategies failed for query '{query}'. No results available.")
-        return []
     
     def duckduckgo_search(self, query: str) -> List[Dict[str, Any]]:
         """Enhanced DuckDuckGo search using the official library"""
@@ -186,7 +147,6 @@ class WebResearchService:
                     
         except Exception as e:
             logger.error(f"DuckDuckGo library search failed: {e}")
-            # Don't return empty results - let fallback handle it
             return []
             
         logger.info(f"DuckDuckGo search completed, found {len(results)} results")
@@ -259,213 +219,6 @@ class WebResearchService:
                 continue
             
         logger.info(f"Batch research completed for {len(results)} alumni")
-        return results
-    
-    def _google_custom_search(self, query: str) -> List[Dict[str, Any]]:
-        """Try Google Custom Search API with enhanced error handling"""
-        api_key = os.getenv('GOOGLE_API_KEY')
-        search_engine_id = os.getenv('GOOGLE_SEARCH_ENGINE_ID')
-        
-        if not api_key or not search_engine_id:
-            logger.debug("Google Custom Search API credentials not available")
-            return []
-        
-        try:
-            url = "https://www.googleapis.com/customsearch/v1"
-            params = {
-                'key': api_key,
-                'cx': search_engine_id,
-                'q': query,
-                'num': 5,
-                'safe': 'active'  # Safe search
-            }
-            
-            response = self._safe_request(url, params=params, timeout=10)
-            response.raise_for_status()
-            
-            data = response.json()
-            results = []
-            
-            for item in data.get('items', []):
-                results.append({
-                    "title": item.get('title', ''),
-                    "url": item.get('link', ''),
-                    "snippet": item.get('snippet', ''),
-                    "source": "Google Custom Search"
-                })
-            
-            return results
-            
-        except requests.exceptions.HTTPError as e:
-            if e.response.status_code == 403:
-                logger.warning("Google Custom Search API quota exceeded or access denied")
-            elif e.response.status_code == 400:
-                logger.warning("Google Custom Search API bad request - check query format")
-            else:
-                logger.error(f"Google Custom Search HTTP error: {e}")
-        except requests.exceptions.Timeout:
-            logger.error("Google Custom Search API timeout")
-        except Exception as e:
-            logger.error(f"Google Custom Search failed: {e}")
-        
-        return []
-    
-    def _bing_web_search(self, query: str) -> List[Dict[str, Any]]:
-        """Try Bing Web Search API with enhanced error handling"""
-        api_key = os.getenv('BING_API_KEY')
-        
-        if not api_key:
-            logger.debug("Bing Web Search API key not available")
-            return []
-        
-        try:
-            url = "https://api.bing.microsoft.com/v7.0/search"
-            headers = {'Ocp-Apim-Subscription-Key': api_key}
-            params = {
-                'q': query,
-                'count': 5,
-                'responseFilter': 'Webpages',
-                'safeSearch': 'Moderate'
-            }
-            
-            response = self._safe_request(url, headers=headers, params=params, timeout=10)
-            response.raise_for_status()
-            
-            data = response.json()
-            results = []
-            
-            for item in data.get('webPages', {}).get('value', []):
-                results.append({
-                    "title": item.get('name', ''),
-                    "url": item.get('url', ''),
-                    "snippet": item.get('snippet', ''),
-                    "source": "Bing Web Search"
-                })
-            
-            return results
-            
-        except requests.exceptions.HTTPError as e:
-            if e.response.status_code == 401:
-                logger.warning("Bing Web Search API authentication failed")
-            elif e.response.status_code == 403:
-                logger.warning("Bing Web Search API quota exceeded")
-            else:
-                logger.error(f"Bing Web Search HTTP error: {e}")
-        except requests.exceptions.Timeout:
-            logger.error("Bing Web Search API timeout")
-        except Exception as e:
-            logger.error(f"Bing Web Search failed: {e}")
-        
-        return []
-    
-    def _brave_search(self, query: str) -> List[Dict[str, Any]]:
-        """Try Brave Search API with enhanced error handling"""
-        api_key = os.getenv('BRAVE_API_KEY')
-        
-        if not api_key:
-            logger.debug("Brave Search API key not available")
-            return []
-        
-        try:
-            url = "https://api.search.brave.com/res/v1/web/search"
-            headers = {'X-Subscription-Token': api_key}
-            params = {
-                'q': query,
-                'count': 5,
-                'safesearch': 'moderate'
-            }
-            
-            response = self._safe_request(url, headers=headers, params=params, timeout=10)
-            response.raise_for_status()
-            
-            data = response.json()
-            results = []
-            
-            for item in data.get('web', {}).get('results', []):
-                results.append({
-                    "title": item.get('title', ''),
-                    "url": item.get('url', ''),
-                    "snippet": item.get('description', ''),
-                    "source": "Brave Search"
-                })
-            
-            return results
-            
-        except requests.exceptions.HTTPError as e:
-            if e.response.status_code == 401:
-                logger.warning("Brave Search API authentication failed")
-            elif e.response.status_code == 429:
-                logger.warning("Brave Search API rate limit exceeded")
-            else:
-                logger.error(f"Brave Search HTTP error: {e}")
-        except requests.exceptions.Timeout:
-            logger.error("Brave Search API timeout")
-        except Exception as e:
-            logger.error(f"Brave Search failed: {e}")
-        
-        return []
-    
-    def _direct_site_search(self, query: str) -> List[Dict[str, Any]]:
-        """Direct search on professional sites"""
-        logger.debug(f"Attempting direct site search for: {query}")
-        
-        # Extract name from query (remove quotes and extra terms)
-        name = query.strip('"').split()[0:2]  # Take first two words as name
-        name_str = ' '.join(name)
-        
-        results = []
-        
-        # Search LinkedIn directly
-        linkedin_results = self._search_linkedin_direct(name_str)
-        results.extend(linkedin_results)
-        
-        # Search company career pages (if we can identify companies)
-        # This is a simplified approach - in production you'd want more sophisticated logic
-        
-        # Search university alumni pages
-        university_results = self._search_university_sites(name_str)
-        results.extend(university_results)
-        
-        return results[:5]  # Limit to 5 results
-    
-    def _search_linkedin_direct(self, name: str) -> List[Dict[str, Any]]:
-        """Search LinkedIn directly for a person"""
-        try:
-            # Note: This is a simplified approach. Real LinkedIn scraping requires proper authentication
-            # and is against ToS. This is just for demonstration.
-            
-            search_url = f"https://www.linkedin.com/search/results/people/?keywords={name.replace(' ', '%20')}"
-            
-            # We can't actually scrape LinkedIn without authentication, so we'll create a mock result
-            # In a real implementation, you'd use official LinkedIn API or proper scraping tools
-            
-            return [{
-                "title": f"LinkedIn Search Results for {name}",
-                "url": search_url,
-                "snippet": f"Professional profile search results for {name} on LinkedIn",
-                "source": "LinkedIn Direct"
-            }]
-            
-        except Exception as e:
-            logger.error(f"LinkedIn direct search failed: {e}")
-            return []
-    
-    def _search_university_sites(self, name: str) -> List[Dict[str, Any]]:
-        """Search university alumni directories"""
-        results = []
-        
-        # ECU Alumni search
-        try:
-            ecu_url = f"https://www.ecu.edu.au/alumni/search?query={name.replace(' ', '+')}"
-            results.append({
-                "title": f"ECU Alumni Search for {name}",
-                "url": ecu_url,
-                "snippet": f"Edith Cowan University alumni directory search for {name}",
-                "source": "ECU Alumni"
-            })
-        except Exception as e:
-            logger.error(f"ECU search failed: {e}")
-        
         return results
     
     def _generate_search_queries(self, name: str, additional_info: str = "") -> List[str]:

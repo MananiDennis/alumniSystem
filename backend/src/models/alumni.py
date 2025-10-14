@@ -62,6 +62,29 @@ class DataSource:
 
 
 @dataclass
+class Education:
+    """Education information for an alumni"""
+    institution: str
+    degree: Optional[str] = None
+    field_of_study: Optional[str] = None
+    graduation_year: Optional[int] = None
+    start_year: Optional[int] = None
+    
+    def __post_init__(self):
+        if not self.institution:
+            raise ValueError("Institution is required")
+        
+        if self.graduation_year and self.start_year:
+            if self.start_year > self.graduation_year:
+                raise ValueError("Start year cannot be after graduation year")
+        
+        if self.graduation_year:
+            current_year = datetime.now().year
+            if not 1950 <= self.graduation_year <= current_year + 10:
+                raise ValueError(f"Graduation year must be between 1950 and {current_year + 10}")
+
+
+@dataclass
 class AlumniProfile:
 
     full_name: str
@@ -69,6 +92,7 @@ class AlumniProfile:
     graduation_year: Optional[int] = None
     current_position: Optional[JobPosition] = None
     work_history: List[JobPosition] = field(default_factory=list)
+    education_history: List[Education] = field(default_factory=list)
     location: Optional[str] = None
     industry: Optional[str] = None
     linkedin_url: Optional[str] = None
@@ -98,6 +122,11 @@ class AlumniProfile:
         
         self.work_history.append(position)
         self.work_history.sort(key=lambda x: x.start_date or date.min, reverse=True)
+    
+    def add_education(self, education: Education):
+        self.education_history.append(education)
+        # Sort by graduation year (most recent first)
+        self.education_history.sort(key=lambda x: x.graduation_year or 0, reverse=True)
     
     def get_current_job(self) -> Optional[JobPosition]:
         return self.current_position

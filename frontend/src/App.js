@@ -75,8 +75,6 @@ function App() {
         return <Analytics token={token} />;
       case "collection":
         return <DataCollection token={token} />;
-      case "settings":
-        return <div>Settings page coming soon...</div>;
       default:
         return <Dashboard token={token} />;
     }

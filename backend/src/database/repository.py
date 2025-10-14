@@ -1,8 +1,7 @@
 from typing import List, Optional
 from sqlalchemy.orm import Session
-from sqlalchemy import and_, or_, func
-from src.database.models import AlumniProfileDB, WorkHistoryDB, DataSourceDB
-from src.models.alumni import AlumniProfile, JobPosition, DataSource, IndustryType
+from src.database.models import AlumniProfileDB, WorkHistoryDB, EducationDB, DataSourceDB
+from src.models.alumni import AlumniProfile, JobPosition, Education, DataSource, IndustryType
 import json
 from datetime import datetime
 
@@ -14,13 +13,27 @@ class AlumniRepository:
         self.session = session
     
     def create_alumni(self, alumni: AlumniProfile) -> AlumniProfile:
+        # Validate alumni name before creating
+        if not alumni.full_name:
+            raise ValueError("Full name is required")
+        
+        trimmed_name = alumni.full_name.strip()
+        if not trimmed_name:
+            raise ValueError("Full name cannot be empty")
+        
+        if len(trimmed_name) < 2:
+            raise ValueError("Full name must be at least 2 characters long")
+        
+        # Use the trimmed name
+        alumni.full_name = trimmed_name
+        
         # Create a new alumni profile
         db_alumni = AlumniProfileDB(
             full_name=alumni.full_name,
             graduation_year=alumni.graduation_year,
             current_job_title=alumni.current_position.title if alumni.current_position else None,
             current_company=alumni.current_position.company if alumni.current_position else None,
-            industry=alumni.industry.value if alumni.industry else None,
+            industry=alumni.industry if alumni.industry else None,
             location=alumni.location,
             linkedin_url=alumni.linkedin_url,
             confidence_score=alumni.confidence_score,
@@ -33,6 +46,10 @@ class AlumniRepository:
         # Add work history
         for job in alumni.work_history:
             self.add_work_history(db_alumni.id, job)
+        
+        # Add education history
+        for education in alumni.education_history:
+            self.add_education_history(db_alumni.id, education)
         
         # Add data sources
         for source in alumni.data_sources:
@@ -47,10 +64,7 @@ class AlumniRepository:
     def get_alumni_by_id(self, alumni_id: int) -> Optional[AlumniProfile]:
         """Get alumni by ID"""
         db_alumni = self.session.query(AlumniProfileDB).filter(
-            AlumniProfileDB.id == alumni_id,
-            AlumniProfileDB.full_name.isnot(None),
-            func.trim(AlumniProfileDB.full_name) != '',
-            func.length(func.trim(AlumniProfileDB.full_name)) >= 2
+            AlumniProfileDB.id == alumni_id
         ).first()
         
         if not db_alumni:
@@ -61,10 +75,7 @@ class AlumniRepository:
     def get_alumni_by_name(self, name: str) -> List[AlumniProfile]:
         """Get alumni by name (partial match)"""
         db_alumni_list = self.session.query(AlumniProfileDB).filter(
-            AlumniProfileDB.full_name.ilike(f"%{name}%"),
-            AlumniProfileDB.full_name.isnot(None),
-            func.trim(AlumniProfileDB.full_name) != '',
-            func.length(func.trim(AlumniProfileDB.full_name)) >= 2
+            AlumniProfileDB.full_name.ilike(f"%{name}%")
         ).all()
         
         return [self.convert_db_to_alumni_profile(db_alumni) for db_alumni in db_alumni_list]
@@ -77,11 +88,7 @@ class AlumniRepository:
                      graduation_year_min: Optional[int] = None,
                      graduation_year_max: Optional[int] = None) -> List[AlumniProfile]:
         """Search alumni with multiple filters"""
-        query = self.session.query(AlumniProfileDB).filter(
-            AlumniProfileDB.full_name.isnot(None),
-            func.trim(AlumniProfileDB.full_name) != '',
-            func.length(func.trim(AlumniProfileDB.full_name)) >= 2
-        )
+        query = self.session.query(AlumniProfileDB)
         
         if name:
             query = query.filter(AlumniProfileDB.full_name.ilike(f"%{name}%"))
@@ -121,7 +128,7 @@ class AlumniRepository:
         db_alumni.graduation_year = alumni.graduation_year
         db_alumni.current_job_title = alumni.current_position.title if alumni.current_position else None
         db_alumni.current_company = alumni.current_position.company if alumni.current_position else None
-        db_alumni.industry = alumni.industry.value if alumni.industry else None
+        db_alumni.industry = alumni.industry if alumni.industry else None
         db_alumni.location = alumni.location
         db_alumni.linkedin_url = alumni.linkedin_url
         db_alumni.confidence_score = alumni.confidence_score
@@ -134,6 +141,14 @@ class AlumniRepository:
         
         for job in alumni.work_history:
             self.add_work_history(alumni.id, job)
+        
+        # Update education history (delete and recreate for simplicity)
+        self.session.query(EducationDB).filter(
+            EducationDB.alumni_id == alumni.id
+        ).delete()
+        
+        for education in alumni.education_history:
+            self.add_education_history(alumni.id, education)
         
         self.session.commit()
         return alumni
@@ -153,11 +168,7 @@ class AlumniRepository:
     
     def get_all_alumni(self, limit: Optional[int] = None, offset: int = 0) -> List[AlumniProfile]:
         """Get all alumni with optional pagination"""
-        query = self.session.query(AlumniProfileDB).filter(
-            AlumniProfileDB.full_name.isnot(None),
-            func.trim(AlumniProfileDB.full_name) != '',
-            func.length(func.trim(AlumniProfileDB.full_name)) >= 2
-        ).offset(offset)
+        query = self.session.query(AlumniProfileDB).offset(offset)
         
         if limit:
             query = query.limit(limit)
@@ -173,10 +184,21 @@ class AlumniRepository:
             start_date=job.start_date,
             end_date=job.end_date,
             is_current=job.is_current,
-            industry=job.industry.value if job.industry else None,
+            industry=job.industry if job.industry else None,
             location=job.location
         )
         self.session.add(db_job)
+    
+    def add_education_history(self, alumni_id: int, education: Education):
+        db_education = EducationDB(
+            alumni_id=alumni_id,
+            institution=education.institution,
+            degree=education.degree,
+            field_of_study=education.field_of_study,
+            graduation_year=education.graduation_year,
+            start_year=education.start_year
+        )
+        self.session.add(db_education)
     
     def add_data_source(self, alumni_id: int, source: DataSource):
         """Add data source entry"""
@@ -194,13 +216,8 @@ class AlumniRepository:
         # Convert work history
         work_history = []
         for db_job in db_alumni.work_history:
-            # Safely convert industry to enum, use None if invalid
-            industry = None
-            if db_job.industry:
-                try:
-                    industry = IndustryType(db_job.industry)
-                except ValueError:
-                    industry = None  # Invalid enum value, use None
+            # Keep industry as string (don't convert to enum)
+            industry = db_job.industry if db_job.industry else None
             
             job = JobPosition(
                 title=db_job.job_title,
@@ -212,6 +229,18 @@ class AlumniRepository:
                 location=db_job.location
             )
             work_history.append(job)
+        
+        # Convert education history
+        education_history = []
+        for db_education in db_alumni.education_history:
+            education = Education(
+                institution=db_education.institution,
+                degree=db_education.degree,
+                field_of_study=db_education.field_of_study,
+                graduation_year=db_education.graduation_year,
+                start_year=db_education.start_year
+            )
+            education_history.append(education)
         
         # Convert data sources
         data_sources = []
@@ -231,13 +260,10 @@ class AlumniRepository:
                 current_position = job
                 break
         
-        # Safely convert main industry to enum, use None if invalid
+        # Safely convert main industry to string (keep as string, don't convert to enum)
         main_industry = None
         if db_alumni.industry:
-            try:
-                main_industry = IndustryType(db_alumni.industry)
-            except ValueError:
-                main_industry = None  # Invalid enum value, use None
+            main_industry = db_alumni.industry  # Keep as string
         
         return AlumniProfile(
             id=db_alumni.id,
@@ -245,6 +271,7 @@ class AlumniRepository:
             graduation_year=db_alumni.graduation_year,
             current_position=current_position,
             work_history=work_history,
+            education_history=education_history,
             location=db_alumni.location,
             industry=main_industry,
             linkedin_url=db_alumni.linkedin_url,
