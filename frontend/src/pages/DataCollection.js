@@ -358,6 +358,10 @@ export default function DataCollection({ token }) {
 
       const submitData = {
         ...manualForm,
+        graduation_year:
+          manualForm.graduation_year === ""
+            ? null
+            : parseInt(manualForm.graduation_year),
         work_history: formattedWorkHistory,
         education: formattedEducation,
       };
@@ -644,11 +648,20 @@ export default function DataCollection({ token }) {
                   full name.
                 </Typography>
 
+                <Alert severity="info" sx={{ mb: 3, borderRadius: 2 }}>
+                  <Typography variant="body2">
+                    <strong>Tip:</strong> Fields marked with * are required.
+                    Graduation year and other dates can be left blank if
+                    unknown.
+                  </Typography>
+                </Alert>
+
                 <Grid container spacing={3}>
                   <Grid item xs={12} md={6}>
                     <TextField
                       fullWidth
                       label="Full Name *"
+                      placeholder="e.g., John Smith"
                       value={manualForm.full_name}
                       onChange={(e) =>
                         setManualForm({
@@ -669,6 +682,9 @@ export default function DataCollection({ token }) {
                           })
                         }
                       >
+                        <MenuItem value="">
+                          <em>Not specified</em>
+                        </MenuItem>
                         {Array.from({ length: 81 }, (_, i) => 1950 + i).map(
                           (year) => (
                             <MenuItem key={year} value={year}>
@@ -681,6 +697,7 @@ export default function DataCollection({ token }) {
                     <TextField
                       fullWidth
                       label="Location"
+                      placeholder="e.g., Perth, Australia"
                       value={manualForm.location}
                       onChange={(e) =>
                         setManualForm({
@@ -701,6 +718,9 @@ export default function DataCollection({ token }) {
                           })
                         }
                       >
+                        <MenuItem value="">
+                          <em>Not specified</em>
+                        </MenuItem>
                         <MenuItem value="Technology">Technology</MenuItem>
                         <MenuItem value="Finance">Finance</MenuItem>
                         <MenuItem value="Healthcare">Healthcare</MenuItem>
@@ -717,6 +737,7 @@ export default function DataCollection({ token }) {
                     <TextField
                       fullWidth
                       label="LinkedIn URL"
+                      placeholder="e.g., https://linkedin.com/in/johnsmith"
                       value={manualForm.linkedin_url}
                       onChange={(e) =>
                         setManualForm({
@@ -737,6 +758,7 @@ export default function DataCollection({ token }) {
                     <TextField
                       fullWidth
                       label="Job Title"
+                      placeholder="e.g., Software Engineer"
                       value={manualForm.current_job_title}
                       onChange={(e) =>
                         setManualForm({
@@ -749,6 +771,7 @@ export default function DataCollection({ token }) {
                     <TextField
                       fullWidth
                       label="Company"
+                      placeholder="e.g., Tech Corp Pty Ltd"
                       value={manualForm.current_job_company}
                       onChange={(e) =>
                         setManualForm({
@@ -775,6 +798,7 @@ export default function DataCollection({ token }) {
                     <TextField
                       fullWidth
                       label="Job Industry"
+                      placeholder="e.g., Technology"
                       value={manualForm.current_job_industry}
                       onChange={(e) =>
                         setManualForm({
@@ -787,6 +811,7 @@ export default function DataCollection({ token }) {
                     <TextField
                       fullWidth
                       label="Job Location"
+                      placeholder="e.g., Perth, WA"
                       value={manualForm.current_job_location}
                       onChange={(e) =>
                         setManualForm({
@@ -860,6 +885,7 @@ export default function DataCollection({ token }) {
                               <TextField
                                 fullWidth
                                 label="Job Title"
+                                placeholder="e.g., Senior Developer"
                                 value={job.title}
                                 onChange={(e) =>
                                   updateWorkHistoryEntry(
@@ -875,6 +901,7 @@ export default function DataCollection({ token }) {
                               <TextField
                                 fullWidth
                                 label="Company"
+                                placeholder="e.g., ABC Corporation"
                                 value={job.company}
                                 onChange={(e) =>
                                   updateWorkHistoryEntry(
@@ -924,6 +951,7 @@ export default function DataCollection({ token }) {
                               <TextField
                                 fullWidth
                                 label="Industry"
+                                placeholder="e.g., Technology"
                                 value={job.industry}
                                 onChange={(e) =>
                                   updateWorkHistoryEntry(
@@ -939,6 +967,7 @@ export default function DataCollection({ token }) {
                               <TextField
                                 fullWidth
                                 label="Location"
+                                placeholder="e.g., Sydney, NSW"
                                 value={job.location}
                                 onChange={(e) =>
                                   updateWorkHistoryEntry(
@@ -947,6 +976,7 @@ export default function DataCollection({ token }) {
                                     e.target.value
                                   )
                                 }
+                                InputLabelProps={{ shrink: true }}
                                 size="small"
                               />
                             </Grid>

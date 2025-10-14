@@ -419,11 +419,19 @@ def manual_collect_alumni(request: ManualCollectRequest, user_email: str = Depen
             
             # Add current job to work history if provided
             if request.current_job_title and request.current_job_company:
+                start_date = None
+                if request.current_job_start_date:
+                    try:
+                        start_date = date.fromisoformat(request.current_job_start_date)
+                    except ValueError:
+                        # Invalid date format, set to None
+                        start_date = None
+                
                 current_job = WorkHistoryDB(
                     alumni_id=profile.id,
                     job_title=request.current_job_title,
                     company=request.current_job_company,
-                    start_date=date.fromisoformat(request.current_job_start_date) if request.current_job_start_date else None,
+                    start_date=start_date,
                     industry=request.current_job_industry,
                     location=request.current_job_location,
                     is_current=True

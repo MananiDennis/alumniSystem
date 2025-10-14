@@ -1,6 +1,6 @@
 from typing import List, Optional
 from sqlalchemy.orm import Session
-from sqlalchemy import and_, or_
+from sqlalchemy import and_, or_, func
 from src.database.models import AlumniProfileDB, WorkHistoryDB, DataSourceDB
 from src.models.alumni import AlumniProfile, JobPosition, DataSource, IndustryType
 import json
@@ -47,7 +47,10 @@ class AlumniRepository:
     def get_alumni_by_id(self, alumni_id: int) -> Optional[AlumniProfile]:
         """Get alumni by ID"""
         db_alumni = self.session.query(AlumniProfileDB).filter(
-            AlumniProfileDB.id == alumni_id
+            AlumniProfileDB.id == alumni_id,
+            AlumniProfileDB.full_name.isnot(None),
+            func.trim(AlumniProfileDB.full_name) != '',
+            func.length(func.trim(AlumniProfileDB.full_name)) >= 2
         ).first()
         
         if not db_alumni:
@@ -58,7 +61,10 @@ class AlumniRepository:
     def get_alumni_by_name(self, name: str) -> List[AlumniProfile]:
         """Get alumni by name (partial match)"""
         db_alumni_list = self.session.query(AlumniProfileDB).filter(
-            AlumniProfileDB.full_name.ilike(f"%{name}%")
+            AlumniProfileDB.full_name.ilike(f"%{name}%"),
+            AlumniProfileDB.full_name.isnot(None),
+            func.trim(AlumniProfileDB.full_name) != '',
+            func.length(func.trim(AlumniProfileDB.full_name)) >= 2
         ).all()
         
         return [self.convert_db_to_alumni_profile(db_alumni) for db_alumni in db_alumni_list]
@@ -71,7 +77,11 @@ class AlumniRepository:
                      graduation_year_min: Optional[int] = None,
                      graduation_year_max: Optional[int] = None) -> List[AlumniProfile]:
         """Search alumni with multiple filters"""
-        query = self.session.query(AlumniProfileDB)
+        query = self.session.query(AlumniProfileDB).filter(
+            AlumniProfileDB.full_name.isnot(None),
+            func.trim(AlumniProfileDB.full_name) != '',
+            func.length(func.trim(AlumniProfileDB.full_name)) >= 2
+        )
         
         if name:
             query = query.filter(AlumniProfileDB.full_name.ilike(f"%{name}%"))
@@ -143,7 +153,11 @@ class AlumniRepository:
     
     def get_all_alumni(self, limit: Optional[int] = None, offset: int = 0) -> List[AlumniProfile]:
         """Get all alumni with optional pagination"""
-        query = self.session.query(AlumniProfileDB).offset(offset)
+        query = self.session.query(AlumniProfileDB).filter(
+            AlumniProfileDB.full_name.isnot(None),
+            func.trim(AlumniProfileDB.full_name) != '',
+            func.length(func.trim(AlumniProfileDB.full_name)) >= 2
+        ).offset(offset)
         
         if limit:
             query = query.limit(limit)
