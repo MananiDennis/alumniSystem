@@ -3,6 +3,8 @@ __pycache__/
 .pytest_cache/
 tests/
 .env
+.env.development
+.env.production
 frontend/node_modules
 .idea
 
