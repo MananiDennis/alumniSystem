@@ -25,6 +25,30 @@ def format_alumni(alumni) -> dict:
         if last_updated and hasattr(last_updated, 'isoformat'):
             last_updated = last_updated.isoformat()
 
+        # Format work history
+        work_history = []
+        for job_pos in getattr(alumni, 'work_history', []):
+            work_history.append({
+                "title": job_pos.title,
+                "company": job_pos.company,
+                "start_date": job_pos.start_date.isoformat() if job_pos.start_date else None,
+                "end_date": job_pos.end_date.isoformat() if job_pos.end_date else None,
+                "is_current": job_pos.is_current,
+                "industry": job_pos.industry,
+                "location": job_pos.location
+            })
+
+        # Format education history
+        education_history = []
+        for edu in getattr(alumni, 'education_history', []):
+            education_history.append({
+                "institution": edu.institution,
+                "degree": edu.degree,
+                "field_of_study": edu.field_of_study,
+                "graduation_year": edu.graduation_year,
+                "start_year": edu.start_year
+            })
+
         return {
             "id": getattr(alumni, 'id', None),
             "name": getattr(alumni, 'full_name', 'Unknown'),
@@ -34,7 +58,8 @@ def format_alumni(alumni) -> dict:
             "linkedin_url": getattr(alumni, 'linkedin_url', None),
             "confidence_score": getattr(alumni, 'confidence_score', 0.0),
             "current_job": job,
-            "work_history_count": len(getattr(alumni, 'work_history', [])),
+            "work_history": work_history,
+            "education_history": education_history,
             "last_updated": last_updated
         }
     except Exception as e:

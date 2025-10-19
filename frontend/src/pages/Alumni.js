@@ -180,12 +180,14 @@ export default function Alumni({ token }) {
               location: job.location || "",
             }))
           : [],
-        education: detailedData.education
-          ? detailedData.education.map((edu) => ({
+        education: detailedData.education_history
+          ? detailedData.education_history.map((edu) => ({
               degree: edu.degree || "",
               institution: edu.institution || "",
-              start_date: edu.start_date || "",
-              end_date: edu.end_date || "",
+              start_date: edu.start_year ? edu.start_year.toString() : "",
+              end_date: edu.graduation_year
+                ? edu.graduation_year.toString()
+                : "",
               field_of_study: edu.field_of_study || "",
             }))
           : [],
@@ -269,23 +271,27 @@ export default function Alumni({ token }) {
 
     try {
       // Format work history and education for backend
-      const formattedWorkHistory = editForm.work_history
-        .map(
-          (job) =>
-            `${job.title} - ${job.company} - ${job.start_date || ""} - ${
-              job.end_date || ""
-            }`
-        )
-        .join("\n");
+      const formattedWorkHistory = editForm.work_history.map((job) => ({
+        title: job.title,
+        company: job.company,
+        start_date: job.start_date
+          ? new Date(job.start_date).toISOString().split("T")[0]
+          : null,
+        end_date: job.end_date
+          ? new Date(job.end_date).toISOString().split("T")[0]
+          : null,
+        is_current: job.is_current || false,
+        industry: job.industry,
+        location: job.location,
+      }));
 
-      const formattedEducation = editForm.education
-        .map(
-          (edu) =>
-            `${edu.degree} - ${edu.institution} - ${edu.start_date || ""} - ${
-              edu.end_date || ""
-            }`
-        )
-        .join("\n");
+      const formattedEducationHistory = editForm.education.map((edu) => ({
+        institution: edu.institution,
+        degree: edu.degree,
+        field_of_study: edu.field_of_study,
+        start_year: edu.start_date ? parseInt(edu.start_date) : null,
+        graduation_year: edu.end_date ? parseInt(edu.end_date) : null,
+      }));
 
       const submitData = {
         ...editForm,
@@ -294,7 +300,7 @@ export default function Alumni({ token }) {
             ? null
             : parseInt(editForm.graduation_year),
         work_history: formattedWorkHistory,
-        education: formattedEducation,
+        education_history: formattedEducationHistory,
       };
 
       await axios.put(
@@ -827,15 +833,15 @@ export default function Alumni({ token }) {
                 )}
 
               {/* Education */}
-              {detailedAlumni.education &&
-                detailedAlumni.education.length > 0 && (
+              {detailedAlumni.education_history &&
+                detailedAlumni.education_history.length > 0 && (
                   <>
                     <Divider sx={{ my: 3 }} />
                     <Typography variant="h6" sx={{ fontWeight: 600, mb: 2 }}>
                       Education
                     </Typography>
                     <List>
-                      {detailedAlumni.education.map((edu, index) => (
+                      {detailedAlumni.education_history.map((edu, index) => (
                         <ListItem key={index} sx={{ px: 0, py: 1 }}>
                           <ListItemText
                             primary={

@@ -1,20 +1,22 @@
 import requests
 from bs4 import BeautifulSoup
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 import time
 import logging
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 import os
 import json
+import re
 from ddgs import DDGS
 
 logger = logging.getLogger(__name__)
 
+
 class WebResearchService:
-    """Simple web research service using common search tools"""
-    
-    def __init__(self):
+    """Simple web research service using common search tools."""
+
+    def __init__(self) -> None:
         self.session = self._create_session_with_retry()
     
     def _create_session_with_retry(self):
@@ -157,31 +159,42 @@ class WebResearchService:
         try:
             response = self.session.get(url, timeout=15)  # Use session and increased timeout
             response.raise_for_status()
-            
+
             soup = BeautifulSoup(response.content, 'html.parser')
-            
+
             # Extract basic info
             title = soup.find('title')
             title_text = title.get_text() if title else ""
-            
+
             # Look for professional keywords
             text = soup.get_text().lower()
-            
+
             info = {
                 "url": url,
                 "title": title_text,
                 "has_linkedin": "linkedin" in text,
-                "has_professional_info": any(word in text for word in [
-                    "engineer", "manager", "director", "analyst", "consultant",
-                    "developer", "specialist", "coordinator", "officer"
-                ]),
-                "mentions_ecu": any(phrase in text for phrase in [
-                    "edith cowan", "ecu", "edith cowan university"
-                ])
+                "has_professional_info": any(
+                    word in text
+                    for word in [
+                        "engineer",
+                        "manager",
+                        "director",
+                        "analyst",
+                        "consultant",
+                        "developer",
+                        "specialist",
+                        "coordinator",
+                        "officer",
+                    ]
+                ),
+                "mentions_ecu": any(
+                    phrase in text
+                    for phrase in ["edith cowan", "ecu", "edith cowan university"]
+                ),
             }
-            
+
             return info
-            
+
         except requests.exceptions.Timeout:
             logger.warning(f"Timeout extracting info from {url}")
             return {"url": url, "error": "timeout"}
@@ -220,6 +233,31 @@ class WebResearchService:
             
         logger.info(f"Batch research completed for {len(results)} alumni")
         return results
+
+    def _truncate_text(self, text: str, max_chars: Optional[int]) -> str:
+        if not max_chars or len(text) <= max_chars:
+            return text
+        return text[:max_chars]
+
+    def get_page_text(self, url: str, max_chars: Optional[int] = 30000) -> str:
+        """Fetch a page and return cleaned text content for AI processing.
+
+        Returns an empty string on failure.
+        """
+        try:
+            resp = self.session.get(url, timeout=15)
+            resp.raise_for_status()
+            soup = BeautifulSoup(resp.content, 'html.parser')
+            # Remove script and style tags for cleaner text
+            for s in soup(['script', 'style', 'noscript']):
+                s.decompose()
+            text = soup.get_text(separator='\n')
+            # Collapse multiple whitespace
+            cleaned = '\n'.join([line.strip() for line in text.splitlines() if line.strip()])
+            return self._truncate_text(cleaned, max_chars)
+        except Exception as e:
+            logger.warning(f"Failed to fetch page text from {url}: {e}")
+            return ""
     
     def _generate_search_queries(self, name: str, additional_info: str = "") -> List[str]:
         """Generate targeted search queries for a person"""

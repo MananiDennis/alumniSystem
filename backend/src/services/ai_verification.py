@@ -113,6 +113,40 @@ class AIVerificationService:
         
         # Default to OTHER for unknown industries
         return IndustryType.OTHER.value
+
+    # --- Helper utilities ---
+    def _strip_fences(self, text: str) -> str:
+        """Strip common markdown code fences from AI responses."""
+        if not isinstance(text, str):
+            return text
+        t = text.strip()
+        if t.startswith('```json'):
+            t = t[7:]
+        if t.startswith('```'):
+            t = t[3:]
+        if t.endswith('```'):
+            t = t[:-3]
+        return t.strip()
+
+    def _normalize_confidence(self, c: Any) -> float:
+        """Normalize a confidence value possibly in 0-100 or 0.0-1.0 to 0.0-1.0."""
+        try:
+            if c is None:
+                return 0.0
+            if isinstance(c, (int, float)):
+                if c > 1.0 and c <= 100.0:
+                    return float(c) / 100.0
+                return float(c)
+            return float(c)
+        except Exception:
+            return 0.0
+
+    def _truncate_payload(self, s: str, max_chars: int = 15000) -> str:
+        if not s:
+            return ""
+        if len(s) <= max_chars:
+            return s
+        return s[:max_chars]
     
     def verify_profile_match(self, 
                            target_name: str,
@@ -359,15 +393,14 @@ Respond with enhanced data in JSON format:
             ])
             
             self.logger.debug(f"Prepared web content for AI: {len(web_content)} characters")
-            
+            # Note: we skip fetching page texts and refinement because LinkedIn blocks anonymous scraping.
             prompt = f"""
             Analyze the following web search results for "{target_name}" and extract structured alumni information.
 
-            This system collects alumni profiles from alumni who studied in ECU located in Perth, Western Australia.
+            This system collects alumni profiles from alumni who studied in ECU (Edith Cowan University) located in Perth, Western Australia. The target person is expected to be an Australian alumnus.
 
             Web Search Results:
             {web_content}
-
 
             Based on this web data, create a structured alumni profile. Even if you are uncertain, return a JSON object with the fields filled where supported and use
             a low confidence_score (e.g., 0.0) when no reliable information is present. Do NOT return the literal value null as a substitute for structured JSON.
@@ -424,7 +457,8 @@ Respond with enhanced data in JSON format:
             - Use null for missing information
             - Industry must be one of the available industry types listed above
             - Only include information clearly supported by the web results
-            - Prioritize Australian connections and professional experience
+            - Prioritize Australian connections and professional experience, especially if it mentions Edith Cowan University or Perth, Western Australia
+            - If the profile does not have clear Australian connections, set confidence_score to 0.0
             """
             
             self.logger.debug("Calling OpenAI API for web data conversion")
@@ -443,20 +477,10 @@ Respond with enhanced data in JSON format:
                 max_tokens=2000
             )
             
-            result_text = response.choices[0].message.content.strip()
+            result_text = response.choices[0].message.content
+            result_text = self._strip_fences(result_text)
             self.logger.debug(f"AI response received: {len(result_text)} characters")
             self.logger.info(f"Raw AI response: '{result_text}'")
-            
-            # No special-case literal null handling anymore - prompt requests a JSON object even when data is absent
-            # Strip markdown code block formatting if present
-            if result_text.startswith('```json'):
-                result_text = result_text[7:]  # Remove ```json
-            if result_text.startswith('```'):
-                result_text = result_text[3:]  # Remove ```
-            if result_text.endswith('```'):
-                result_text = result_text[:-3]  # Remove trailing ```
-            
-            result_text = result_text.strip()
             
             # Parse JSON response
             self.logger.debug("Parsing AI response as JSON")
@@ -487,12 +511,15 @@ Respond with enhanced data in JSON format:
             if not has_meaningful:
                 self.logger.info(f"No meaningful information found in AI response for {target_name}; returning None")
                 return None
+
+            # We skip AI-based refinement using page texts (LinkedIn and similar sources frequently block anonymous fetches).
+            self.logger.debug("Skipped AI-based refinement with page texts due to source blocking or user configuration.")
             
             self.logger.info(f"Successfully parsed profile data for {target_name}: {profile_data.get('full_name', 'Unknown')}")
             
             # Check confidence threshold - lowered for more lenient collection
-            confidence = profile_data.get("confidence_score", 0)
-            if not isinstance(confidence, (int, float)) or confidence < 0.5:
+            confidence = self._normalize_confidence(profile_data.get("confidence_score", 0))
+            if confidence < 0.5:
                 self.logger.info(f"Confidence score {confidence} below threshold 0.5 or invalid, skipping profile for {target_name}")
                 return None
             
@@ -514,25 +541,46 @@ Respond with enhanced data in JSON format:
                         start_date = None
                         end_date = None
                         if job_data.get("start_year"):
-                            start_date = date(job_data["start_year"], 1, 1)
+                            try:
+                                start_date = date(int(job_data["start_year"]), 1, 1)
+                            except Exception:
+                                start_date = None
                         if job_data.get("end_year"):
-                            end_date = date(job_data["end_year"], 1, 1)
-                        
+                            try:
+                                end_date = date(int(job_data["end_year"]), 1, 1)
+                            except Exception:
+                                end_date = None
+
+                        # Fallbacks for title/company if missing
+                        title_val = job_data.get("title") or job_data.get("position")
+                        company_val = job_data.get("company") or job_data.get("employer")
+
+                        # If company is missing, try to infer from profile or set a placeholder
+                        if not company_val:
+                            # prefer an inferred company from profile (not typical) else set Unknown
+                            company_val = profile_data.get("current_company") or profile_data.get("company") or "Unknown"
+                            self.logger.debug(f"Company missing for job '{title_val}'; using fallback '{company_val}'")
+
+                        # If title is missing, skip this job (title is essential)
+                        if not title_val:
+                            self.logger.warning(f"Skipping job entry without title: {job_data}")
+                            continue
+
                         job = JobPosition(
-                            title=job_data.get("title", ""),
-                            company=job_data.get("company", ""),
+                            title=title_val,
+                            company=company_val,
                             start_date=start_date,
                             end_date=end_date,
-                            is_current=job_data.get("is_current", False),
+                            is_current=bool(job_data.get("is_current", False)),
                             industry=self.normalize_industry(job_data.get("industry")),
                             location=job_data.get("location")
                         )
                         work_history.append(job)
-                        
+
                         # Set current job reference
                         if job.is_current:
                             current_job = job
-                            
+
                         self.logger.debug(f"Created job: {job.title} at {job.company}")
                     except Exception as e:
                         self.logger.warning(f"Failed to create job from data {job_data}: {e}")
