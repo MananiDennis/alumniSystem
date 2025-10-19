@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from openai import OpenAI
 from src.config.settings import settings
 import logging
+from datetime import datetime, date
 from src.models.alumni import IndustryType, AlumniProfile, JobPosition, Education, DataSource
 
 
@@ -361,33 +362,27 @@ Respond with enhanced data in JSON format:
             
             prompt = f"""
             Analyze the following web search results for "{target_name}" and extract structured alumni information.
-            
-            This system collects Edith Cowan University (ECU) alumni profiles. ECU is located in Perth, Western Australia.
-            Look for indicators that suggest this person may be an ECU alumnus, even if ECU is not explicitly mentioned.
-            
+
+            This system collects alumni profiles from alumni who studied in ECU located in Perth, Western Australia.
+
             Web Search Results:
             {web_content}
-            
-            ECU Alumni Indicators to consider:
-            - Explicit mention of Edith Cowan University or ECU
-            - Location in Perth, Western Australia, or other Australian locations
-            - Career progression typical of Australian university graduates
-            - Education timeline that could align with ECU attendance (university-level education)
-            - Professional experience in industries common among ECU graduates
-            - Australian business connections or experience
-            
-            Based on this web data, create a structured alumni profile if the person appears to be a legitimate professional.
+
+
+            Based on this web data, create a structured alumni profile. Even if you are uncertain, return a JSON object with the fields filled where supported and use
+            a low confidence_score (e.g., 0.0) when no reliable information is present. Do NOT return the literal value null as a substitute for structured JSON.
+
             Focus on:
             1. Professional information (current job, company, industry, work history)
             2. Education information (universities, degrees, graduation years, fields of study)
             3. Location information
             4. LinkedIn or professional profiles
             5. Career progression
-            
+
             IMPORTANT: Respond with ONLY a valid JSON object. Do not include any explanatory text.
-            
-            Available Industry Types: {', '.join([e.value for e in IndustryType])} 
-            
+
+            Available Industry Types: {', '.join([e.value for e in IndustryType])}
+
             JSON Format (copy this exact structure):
             {{
                 "full_name": "extracted full name or null",
@@ -418,9 +413,9 @@ Respond with enhanced data in JSON format:
                 ],
                 "data_source_url": "best source URL or null"
             }}
-            
+
             Rules:
-            - If no relevant professional information found, return null
+            - Always return a JSON object. If no reliable information is present, set fields to null/empty arrays and set confidence_score to 0.0.
             - Be reasonable with confidence scores (0.6+ for good matches, 0.8+ for strong matches)
             - graduation_year and years must be integers or null
             - confidence_score must be between 0.0 and 1.0
@@ -452,11 +447,7 @@ Respond with enhanced data in JSON format:
             self.logger.debug(f"AI response received: {len(result_text)} characters")
             self.logger.info(f"Raw AI response: '{result_text}'")
             
-            # Handle null response
-            if result_text.lower() == "null":
-                self.logger.info(f"AI returned null for {target_name} - no relevant information found")
-                return None
-                
+            # No special-case literal null handling anymore - prompt requests a JSON object even when data is absent
             # Strip markdown code block formatting if present
             if result_text.startswith('```json'):
                 result_text = result_text[7:]  # Remove ```json
@@ -479,6 +470,22 @@ Respond with enhanced data in JSON format:
             # Validate that we got a dictionary
             if not isinstance(profile_data, dict):
                 self.logger.error(f"AI response is not a JSON object: {type(profile_data)}")
+                return None
+
+            # If the JSON object contains no meaningful fields (all key fields empty/null), treat as no result
+            meaningful_keys = ["full_name", "work_history", "education_history", "linkedin_url", "location", "industry"]
+            has_meaningful = False
+            for key in meaningful_keys:
+                v = profile_data.get(key)
+                if isinstance(v, list) and len(v) > 0:
+                    has_meaningful = True
+                    break
+                if v not in (None, "", [], {}):
+                    has_meaningful = True
+                    break
+
+            if not has_meaningful:
+                self.logger.info(f"No meaningful information found in AI response for {target_name}; returning None")
                 return None
             
             self.logger.info(f"Successfully parsed profile data for {target_name}: {profile_data.get('full_name', 'Unknown')}")
