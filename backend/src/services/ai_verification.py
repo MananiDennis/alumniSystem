@@ -393,6 +393,8 @@ Respond with enhanced data in JSON format:
             ])
             
             self.logger.debug(f"Prepared web content for AI: {len(web_content)} characters")
+            # Log the full web content being sent to AI for debugging
+            self.logger.info(f"Full web content sent to AI for {target_name}: {web_content}")
             # Note: we skip fetching page texts and refinement because LinkedIn blocks anonymous scraping.
             prompt = f"""
             Analyze the following web search results for "{target_name}" and extract structured alumni information.

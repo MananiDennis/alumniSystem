@@ -48,6 +48,9 @@ class DatabaseManager:
                 database_url,
                 connect_args=connect_args,
                 pool_pre_ping=True,  # Verify connections before use
+                pool_size=10,  # Maintain 10 connections in the pool
+                max_overflow=20,  # Allow up to 20 additional connections
+                pool_recycle=3600,  # Recycle connections after 1 hour
                 echo=settings.debug  # Log SQL queries in debug mode
             )
         else:
@@ -55,6 +58,9 @@ class DatabaseManager:
             self.engine = create_engine(
                 database_url,
                 pool_pre_ping=True,  # Verify connections before use
+                pool_size=10,  # Maintain 10 connections in the pool
+                max_overflow=20,  # Allow up to 20 additional connections
+                pool_recycle=3600,  # Recycle connections after 1 hour
                 echo=settings.debug  # Log SQL queries in debug mode
             )
         

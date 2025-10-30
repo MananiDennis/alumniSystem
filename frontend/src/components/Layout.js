@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { useNavigate, useLocation } from "react-router-dom";
 import {
   Box,
   Drawer,
@@ -21,18 +22,22 @@ import {
   Analytics,
   Menu as MenuIcon,
   Logout,
+  MenuBook,
 } from "@mui/icons-material";
 
-const Layout = ({ children, user, onLogout, currentPage, onPageChange }) => {
+const Layout = ({ children, user, onLogout }) => {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [desktopOpen, setDesktopOpen] = useState(true);
   const [anchorEl, setAnchorEl] = useState(null);
+  const navigate = useNavigate();
+  const location = useLocation();
 
   const menuItems = [
-    { text: "Dashboard", icon: <Dashboard />, id: "dashboard" },
-    { text: "Alumni", icon: <People />, id: "alumni" },
-    { text: "Data Collection", icon: <DataUsage />, id: "collection" },
-    { text: "AI Analytics", icon: <Analytics />, id: "analytics" },
+    { text: "Dashboard", icon: <Dashboard />, path: "/dashboard" },
+    { text: "Alumni", icon: <People />, path: "/alumni" },
+    { text: "Data Collection", icon: <DataUsage />, path: "/data-collection" },
+    { text: "AI Analytics", icon: <Analytics />, path: "/analytics" },
+    { text: "Documentation", icon: <MenuBook />, path: "/docs" },
   ];
 
   const drawer = (
@@ -60,7 +65,7 @@ const Layout = ({ children, user, onLogout, currentPage, onPageChange }) => {
           }}
         >
           <img
-            src="/img/Edith_Cowan_University_Logo.svg"
+            src="/img/ecu_logo.png"
             alt="Edith Cowan University Logo"
             style={{ height: "50px", width: "auto", maxWidth: "150px" }}
           />
@@ -79,15 +84,16 @@ const Layout = ({ children, user, onLogout, currentPage, onPageChange }) => {
         {menuItems.map((item) => (
           <ListItem
             button
-            key={item.id}
-            selected={currentPage === item.id}
-            onClick={() => onPageChange(item.id)}
+            key={item.path}
+            selected={location.pathname === item.path}
+            onClick={() => navigate(item.path)}
             sx={{
               mx: 1,
               mb: 1,
-              borderRadius: 2,
+              borderRadius: 0,
               bgcolor:
-                currentPage === item.id ? "rgba(255,255,255,0.15)" : "inherit",
+                location.pathname === item.path ? "rgba(255,255,255,0.15)" : "inherit",
+              borderLeft: location.pathname === item.path ? "4px solid #ff4444" : "4px solid transparent",
               "&:hover": { bgcolor: "rgba(255,255,255,0.1)" },
             }}
           >

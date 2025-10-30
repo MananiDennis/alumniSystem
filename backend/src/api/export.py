@@ -2,8 +2,11 @@ from fastapi import APIRouter, HTTPException
 from typing import Optional, List
 from src.services.search_service import SearchService
 from src.services.export_service import ExportService
+from src.api.cache import cached
+from src.api.executor import get_executor
 from fastapi.responses import FileResponse
 import os
+import asyncio
 
 router = APIRouter(prefix="", tags=["export"])
 
@@ -45,19 +48,58 @@ def export_alumni_data(
 
 
 @router.get("/recent")
-def get_recent_alumni(limit: int = 10):
-    search_service = SearchService()
-    try:
-        all_alumni = search_service.repository.get_all_alumni()
-        recent = sorted(all_alumni, key=lambda x: x.last_updated, reverse=True)[:limit]
-        # Reuse format_alumni if needed (omitted here for brevity)
-        return [ {
-            "id": a.id,
-            "name": a.full_name,
-            "last_updated": a.last_updated.isoformat() if a.last_updated else None
-        } for a in recent]
-    finally:
-        search_service.close()
+@cached(ttl=60)
+async def get_recent_alumni(limit: int = 10):
+    """
+    Get the most recently updated alumni profiles.
+    Short cache time (1 minute) since this updates frequently.
+    """
+    loop = asyncio.get_event_loop()
+    executor = get_executor()
+    
+    def fetch_recent_alumni():
+        search_service = SearchService()
+        try:
+            # Fetch more than we need to account for sorting
+            all_profiles = search_service.repository.get_all_alumni(
+                limit=limit * 2, 
+                offset=0
+            )
+            
+            # Sort by last updated date and take the most recent
+            sorted_profiles = sorted(
+                all_profiles, 
+                key=lambda profile: profile.last_updated, 
+                reverse=True
+            )
+            recent_profiles = sorted_profiles[:limit]
+            
+            # Format the response
+            results = []
+            for profile in recent_profiles:
+                alumni_data = {
+                    "id": profile.id,
+                    "name": profile.full_name,
+                    "graduation_year": profile.graduation_year,
+                    "location": profile.location,
+                    "industry": profile.industry,
+                    "current_job": None,
+                    "last_updated": profile.last_updated.isoformat() if profile.last_updated else None
+                }
+                
+                if profile.current_position:
+                    alumni_data["current_job"] = {
+                        "title": profile.current_position.title,
+                        "company": profile.current_position.company
+                    }
+                
+                results.append(alumni_data)
+            
+            return results
+        finally:
+            search_service.close()
+    
+    return await loop.run_in_executor(executor, fetch_recent_alumni)
 
 
 @router.get("/dashboard/stats")
@@ -77,23 +119,45 @@ def get_dashboard_stats():
 
 
 @router.get("/dashboard/graduation-years")
-def get_graduation_year_distribution():
-    """Get distribution of alumni by graduation year"""
-    search_service = SearchService()
-    try:
-        return search_service.get_graduation_year_distribution()
-    finally:
-        search_service.close()
+@cached(ttl=300)
+async def get_graduation_year_distribution():
+    """
+    Get distribution of alumni grouped by graduation year.
+    Useful for understanding cohort sizes over time.
+    """
+    loop = asyncio.get_event_loop()
+    executor = get_executor()
+    
+    def fetch_year_distribution():
+        search_service = SearchService()
+        try:
+            distribution = search_service.get_graduation_year_distribution()
+            return distribution
+        finally:
+            search_service.close()
+    
+    return await loop.run_in_executor(executor, fetch_year_distribution)
 
 
 @router.get("/dashboard/confidence-scores")
-def get_confidence_score_distribution():
-    """Get distribution of alumni confidence scores in ranges"""
-    search_service = SearchService()
-    try:
-        return search_service.get_confidence_score_distribution()
-    finally:
-        search_service.close()
+@cached(ttl=300)
+async def get_confidence_score_distribution():
+    """
+    Get distribution of data confidence scores in ranges.
+    Helps assess overall data quality for alumni profiles.
+    """
+    loop = asyncio.get_event_loop()
+    executor = get_executor()
+    
+    def fetch_confidence_distribution():
+        search_service = SearchService()
+        try:
+            scores = search_service.get_confidence_score_distribution()
+            return scores
+        finally:
+            search_service.close()
+    
+    return await loop.run_in_executor(executor, fetch_confidence_distribution)
 
 
 @router.get("/dashboard/export")

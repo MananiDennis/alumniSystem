@@ -8,6 +8,7 @@ import json
 
 from src.services.alumni_collector import AlumniCollector
 from src.api.utils import format_alumni
+from src.api.cache import cache
 from src.database.connection import db_manager
 from src.database.models import TaskDB
 
@@ -52,19 +53,28 @@ def collect_alumni(request: CollectRequest, background_tasks: BackgroundTasks, u
 
 
 def run_collection_task(task_id: str, names: List[str], use_web_research: bool):
+    """
+    Background task that collects alumni data from various sources.
+    Updates task status in the task store as it progresses.
+    """
     collector = None
+    
     try:
         collector = AlumniCollector()
-        method = "web-research" if use_web_research else "brightdata"
-        result = collector.collect_alumni(names, method=method)
-
-        # Handle new return format with successful_profiles and failed_names
+        collection_method = "web-research" if use_web_research else "brightdata"
+        
+        # Run the collection process
+        result = collector.collect_alumni(names, method=collection_method)
+        
         successful_profiles = result.get("successful_profiles", [])
         failed_names = result.get("failed_names", [])
-
+        
+        # Update task status based on results
         with task_lock:
-            if len(successful_profiles) == 0 and len(failed_names) == len(names):
-                # All failed
+            all_failed = (len(successful_profiles) == 0 and 
+                         len(failed_names) == len(names))
+            
+            if all_failed:
                 task_store[task_id].update({
                     "status": "failed",
                     "error": "No alumni profiles were collected.",
@@ -73,17 +83,27 @@ def run_collection_task(task_id: str, names: List[str], use_web_research: bool):
                     "end_time": datetime.utcnow()
                 })
             else:
-                # Some succeeded, some failed
+                # At least some profiles were collected successfully
+                formatted_profiles = [format_alumni(p) for p in successful_profiles]
+                
                 task_store[task_id].update({
                     "status": "completed",
                     "results_count": len(successful_profiles),
-                    "results": [format_alumni(p) for p in successful_profiles],
+                    "results": formatted_profiles,
                     "failed_names": failed_names,
                     "end_time": datetime.utcnow()
                 })
+                
+                # Clear cache so new alumni show up immediately
+                cache.clear()
+                
     except Exception as e:
         with task_lock:
-            task_store[task_id].update({"status": "failed", "error": str(e), "end_time": datetime.utcnow()})
+            task_store[task_id].update({
+                "status": "failed",
+                "error": str(e),
+                "end_time": datetime.utcnow()
+            })
     finally:
         if collector:
             collector.close()

@@ -109,22 +109,13 @@ const Dashboard = () => {
       const unemployed = totalAlumni - withCurrentJob;
       const unknown = totalAlumni - withLinkedIn;
 
+      // Guard against division by zero when totalAlumni is 0
+      const pct = (num) => (totalAlumni ? Math.round((num / totalAlumni) * 100) : 0);
+
       const jobStatusData = [
-        {
-          name: "Employed",
-          value: Math.round((withCurrentJob / totalAlumni) * 100),
-          color: "#4caf50",
-        },
-        {
-          name: "Unemployed",
-          value: Math.round((unemployed / totalAlumni) * 100),
-          color: "#f44336",
-        },
-        {
-          name: "Unknown",
-          value: Math.round((unknown / totalAlumni) * 100),
-          color: "#ff9800",
-        },
+        { name: "Employed", value: pct(withCurrentJob), color: "#4caf50" },
+        { name: "Unemployed", value: pct(unemployed), color: "#f44336" },
+        { name: "Unknown", value: pct(unknown), color: "#ff9800" },
       ];
 
       setAnalytics({
@@ -305,7 +296,7 @@ const Dashboard = () => {
             <ResponsiveContainer width="100%" height="85%">
               <PieChart>
                 <Pie
-                  data={analytics.industryDistribution}
+                  data={(analytics && analytics.industryDistribution) || []}
                   cx="50%"
                   cy="50%"
                   labelLine={false}
@@ -316,7 +307,7 @@ const Dashboard = () => {
                   fill="#8884d8"
                   dataKey="value"
                 >
-                  {analytics.industryDistribution?.map((entry, index) => (
+                  {((analytics && analytics.industryDistribution) || []).map((entry, index) => (
                     <Cell key={`cell-${index}`} fill={entry.color} />
                   ))}
                 </Pie>
@@ -326,14 +317,14 @@ const Dashboard = () => {
           </Paper>
         </Grid>
 
-        {/* Graduation Year Distribution */}
-        <Grid item xs={12} md={6}>
+        {/* Graduation Year Distribution - HIDDEN */}
+        {/* <Grid item xs={12} md={6}>
           <Paper sx={{ p: 3, borderRadius: 3, height: 400 }}>
             <Typography variant="h6" sx={{ mb: 2, fontWeight: "bold" }}>
               Alumni by Graduation Year
             </Typography>
             <ResponsiveContainer width="100%" height="85%">
-              <BarChart data={analytics.graduationYears}>
+              <BarChart data={analytics.graduationYears || []}>
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="year" />
                 <YAxis />
@@ -342,16 +333,16 @@ const Dashboard = () => {
               </BarChart>
             </ResponsiveContainer>
           </Paper>
-        </Grid>
+        </Grid> */}
 
-        {/* Location Distribution */}
-        <Grid item xs={12} md={6}>
+        {/* Location Distribution - hidden*/}
+        {/* <Grid item xs={12} md={6}>
           <Paper sx={{ p: 3, borderRadius: 3, height: 400 }}>
             <Typography variant="h6" sx={{ mb: 2, fontWeight: "bold" }}>
               Alumni by Location
             </Typography>
             <ResponsiveContainer width="100%" height="85%">
-              <BarChart data={analytics.locations} layout="horizontal">
+              <BarChart data={analytics.locations || []} layout="horizontal">
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis type="number" />
                 <YAxis dataKey="location" type="category" width={80} />
@@ -360,7 +351,7 @@ const Dashboard = () => {
               </BarChart>
             </ResponsiveContainer>
           </Paper>
-        </Grid>
+        </Grid> */}
 
         {/* Confidence Score Distribution */}
         <Grid item xs={12} md={6}>
@@ -369,7 +360,7 @@ const Dashboard = () => {
               Confidence Score Distribution
             </Typography>
             <ResponsiveContainer width="100%" height="85%">
-              <BarChart data={analytics.confidenceData}>
+              <BarChart data={analytics.confidenceData || []}>
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="range" />
                 <YAxis />
@@ -389,7 +380,7 @@ const Dashboard = () => {
             <ResponsiveContainer width="100%" height="85%">
               <PieChart>
                 <Pie
-                  data={analytics.jobStatus}
+                  data={analytics.jobStatus || []}
                   cx="50%"
                   cy="50%"
                   innerRadius={60}
@@ -397,7 +388,7 @@ const Dashboard = () => {
                   paddingAngle={5}
                   dataKey="value"
                 >
-                  {analytics.jobStatus?.map((entry, index) => (
+                  {((analytics && analytics.jobStatus) || []).map((entry, index) => (
                     <Cell key={`cell-${index}`} fill={entry.color} />
                   ))}
                 </Pie>
@@ -507,7 +498,7 @@ const Dashboard = () => {
                 <Typography variant="body1">Top Industry</Typography>
                 <Chip
                   label={
-                    analytics.industryDistribution.length > 0
+                    analytics?.industryDistribution?.length > 0
                       ? analytics.industryDistribution[0].name
                       : "N/A"
                   }
@@ -526,7 +517,7 @@ const Dashboard = () => {
                 <Typography variant="body1">Top Company</Typography>
                 <Chip
                   label={
-                    analytics.topCompanies.length > 0
+                    analytics?.topCompanies?.length > 0
                       ? analytics.topCompanies[0].company
                       : "N/A"
                   }
@@ -548,7 +539,7 @@ const Dashboard = () => {
               Recently Added Alumni
             </Typography>
             <Box>
-              {recentAlumni.length === 0 ? (
+              {(!recentAlumni || recentAlumni.length === 0) ? (
                 <Typography>No recent alumni found.</Typography>
               ) : (
                 recentAlumni.slice(0, 5).map((alumnus) => (

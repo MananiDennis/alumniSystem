@@ -51,7 +51,7 @@ export default function Login({ onLogin }) {
         >
           <Box sx={{ mb: 2, display: "flex", justifyContent: "center" }}>
             <img
-              src="/img/Edith_Cowan_University_Logo.svg"
+              src="/img/ecu_logo.png"
               alt="Edith Cowan University Logo"
               style={{ height: "48px", width: "auto" }}
             />

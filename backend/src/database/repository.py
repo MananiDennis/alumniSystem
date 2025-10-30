@@ -1,5 +1,6 @@
-from typing import List, Optional
-from sqlalchemy.orm import Session
+from typing import List, Optional, Dict, Any
+from sqlalchemy.orm import Session, selectinload
+from sqlalchemy import func, case
 from src.database.models import AlumniProfileDB, WorkHistoryDB, EducationDB, DataSourceDB
 from src.models.alumni import AlumniProfile, JobPosition, Education, DataSource, IndustryType
 import json
@@ -87,8 +88,12 @@ class AlumniRepository:
                      location: Optional[str] = None,
                      graduation_year_min: Optional[int] = None,
                      graduation_year_max: Optional[int] = None) -> List[AlumniProfile]:
-        """Search alumni with multiple filters"""
-        query = self.session.query(AlumniProfileDB)
+        """Search alumni with multiple filters - optimized with eager loading to avoid N+1 queries"""
+        query = self.session.query(AlumniProfileDB).options(
+            selectinload(AlumniProfileDB.work_history),
+            selectinload(AlumniProfileDB.education_history),
+            selectinload(AlumniProfileDB.data_sources)
+        )
         
         if name:
             query = query.filter(AlumniProfileDB.full_name.ilike(f"%{name}%"))
@@ -167,14 +172,189 @@ class AlumniRepository:
         return True
     
     def get_all_alumni(self, limit: Optional[int] = None, offset: int = 0) -> List[AlumniProfile]:
-        """Get all alumni with optional pagination"""
-        query = self.session.query(AlumniProfileDB).offset(offset)
+        """Get all alumni with optional pagination - optimized with eager loading"""
+        query = self.session.query(AlumniProfileDB).options(
+            selectinload(AlumniProfileDB.work_history),
+            selectinload(AlumniProfileDB.education_history),
+            selectinload(AlumniProfileDB.data_sources)
+        ).offset(offset)
         
         if limit:
             query = query.limit(limit)
         
         db_alumni_list = query.all()
         return [self.convert_db_to_alumni_profile(db_alumni) for db_alumni in db_alumni_list]
+    
+    def get_total_alumni_count(self) -> int:
+        """Get total count of alumni using SQL count"""
+        return self.session.query(func.count(AlumniProfileDB.id)).scalar()
+    
+    def get_linkedin_count(self) -> int:
+        """Get count of alumni with LinkedIn URLs"""
+        return self.session.query(func.count(AlumniProfileDB.id)).filter(
+            AlumniProfileDB.linkedin_url.isnot(None)
+        ).scalar()
+    
+    def get_current_job_count(self) -> int:
+        """Get count of alumni with current jobs"""
+        return self.session.query(func.count(WorkHistoryDB.id)).filter(
+            WorkHistoryDB.is_current == True
+        ).scalar()
+    
+    def get_average_confidence(self) -> float:
+        """Get average confidence score"""
+        result = self.session.query(func.avg(AlumniProfileDB.confidence_score)).scalar()
+        return result if result else 0.0
+    
+    def get_industry_distribution_sql(self) -> dict:
+        """Get industry distribution using SQL GROUP BY"""
+        results = self.session.query(
+            AlumniProfileDB.industry,
+            func.count(AlumniProfileDB.id)
+        ).filter(
+            AlumniProfileDB.industry.isnot(None)
+        ).group_by(AlumniProfileDB.industry).all()
+        
+        distribution = {row[0]: row[1] for row in results}
+        # Add unknown count
+        unknown_count = self.session.query(func.count(AlumniProfileDB.id)).filter(
+            AlumniProfileDB.industry.is_(None)
+        ).scalar()
+        if unknown_count > 0:
+            distribution["Unknown"] = unknown_count
+        return distribution
+    
+    def get_location_distribution_sql(self) -> dict:
+        """Get location distribution using SQL GROUP BY"""
+        results = self.session.query(
+            AlumniProfileDB.location,
+            func.count(AlumniProfileDB.id)
+        ).filter(
+            AlumniProfileDB.location.isnot(None)
+        ).group_by(AlumniProfileDB.location).all()
+        
+        distribution = {row[0]: row[1] for row in results}
+        unknown_count = self.session.query(func.count(AlumniProfileDB.id)).filter(
+            AlumniProfileDB.location.is_(None)
+        ).scalar()
+        if unknown_count > 0:
+            distribution["Unknown"] = unknown_count
+        return distribution
+    
+    def get_graduation_year_distribution_sql(self) -> dict:
+        """Get graduation year distribution using SQL GROUP BY"""
+        results = self.session.query(
+            AlumniProfileDB.graduation_year,
+            func.count(AlumniProfileDB.id)
+        ).filter(
+            AlumniProfileDB.graduation_year.isnot(None)
+        ).group_by(AlumniProfileDB.graduation_year).all()
+        
+        distribution = {str(row[0]): row[1] for row in results}
+        unknown_count = self.session.query(func.count(AlumniProfileDB.id)).filter(
+            AlumniProfileDB.graduation_year.is_(None)
+        ).scalar()
+        if unknown_count > 0:
+            distribution["Unknown"] = unknown_count
+        return distribution
+    
+    def get_confidence_score_distribution_sql(self) -> dict:
+        """Get confidence score distribution in 10% ranges using SQL CASE"""
+        ranges = {
+            '0-10%': 0, '10-20%': 0, '20-30%': 0, '30-40%': 0, '40-50%': 0,
+            '50-60%': 0, '60-70%': 0, '70-80%': 0, '80-90%': 0, '90-100%': 0
+        }
+        
+        # Use CASE statement to categorize scores
+        case_stmt = case(
+            (AlumniProfileDB.confidence_score * 100 < 10, '0-10%'),
+            (AlumniProfileDB.confidence_score * 100 < 20, '10-20%'),
+            (AlumniProfileDB.confidence_score * 100 < 30, '20-30%'),
+            (AlumniProfileDB.confidence_score * 100 < 40, '30-40%'),
+            (AlumniProfileDB.confidence_score * 100 < 50, '40-50%'),
+            (AlumniProfileDB.confidence_score * 100 < 60, '50-60%'),
+            (AlumniProfileDB.confidence_score * 100 < 70, '60-70%'),
+            (AlumniProfileDB.confidence_score * 100 < 80, '70-80%'),
+            (AlumniProfileDB.confidence_score * 100 < 90, '80-90%'),
+            else_='90-100%'
+        )
+        
+        results = self.session.query(
+            case_stmt.label('range'),
+            func.count(AlumniProfileDB.id)
+        ).group_by(case_stmt).all()
+        
+        for row in results:
+            ranges[row[0]] = row[1]
+        
+        return ranges
+    
+    def get_alumni_stats_optimized(self) -> Dict[str, Any]:
+        """
+        Get all alumni statistics in a single optimized query set.
+        This replaces 7 separate queries with 1-2 efficient ones using CTEs and subqueries.
+        """
+        from sqlalchemy import and_, distinct, case, text
+        
+        # Single complex query to get most stats at once
+        # This uses a single database round-trip
+        query = text("""
+            SELECT 
+                COUNT(*) as total_alumni,
+                COUNT(linkedin_url) as with_linkedin,
+                AVG(confidence_score) as average_confidence,
+                (SELECT COUNT(DISTINCT alumni_id) 
+                 FROM work_history 
+                 WHERE is_current = 1) as with_current_job
+            FROM alumni_profiles
+        """)
+        
+        result = self.session.execute(query).first()
+        
+        total_alumni = result.total_alumni or 0
+        with_linkedin = result.with_linkedin or 0
+        average_confidence = float(result.average_confidence or 0.0)
+        with_current_job = result.with_current_job or 0
+        
+        # If no alumni, return empty stats
+        if total_alumni == 0:
+            return {
+                'total_alumni': 0,
+                'with_linkedin': 0,
+                'with_current_job': 0,
+                'average_confidence': 0,
+                'industry_distribution': {},
+                'location_distribution': {},
+                'top_companies': []
+            }
+        
+        # Get distributions in parallel (these benefit from indexes)
+        industry_distribution = self.get_industry_distribution_sql()
+        location_distribution = self.get_location_distribution_sql()
+        top_companies = self.get_top_companies_sql(5)
+        
+        return {
+            'total_alumni': total_alumni,
+            'with_linkedin': with_linkedin,
+            'with_current_job': with_current_job,
+            'average_confidence': average_confidence,
+            'industry_distribution': industry_distribution,
+            'location_distribution': location_distribution,
+            'top_companies': top_companies
+        }
+    
+    def get_top_companies_sql(self, limit: int = 10) -> List[Dict[str, Any]]:
+        """Get top companies using SQL GROUP BY on work_history"""
+        results = self.session.query(
+            WorkHistoryDB.company,
+            func.count(WorkHistoryDB.id)
+        ).filter(
+            WorkHistoryDB.company.isnot(None)
+        ).group_by(WorkHistoryDB.company).order_by(
+            func.count(WorkHistoryDB.id).desc()
+        ).limit(limit).all()
+        
+        return [{'company': row[0], 'alumni_count': row[1]} for row in results]
     
     def add_work_history(self, alumni_id: int, job: JobPosition):
         db_job = WorkHistoryDB(

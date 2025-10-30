@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
 import { ThemeProvider, createTheme } from "@mui/material/styles";
 import CssBaseline from "@mui/material/CssBaseline";
 import axios from "axios";
@@ -10,6 +11,7 @@ import Dashboard from "./pages/Dashboard";
 import Alumni from "./pages/Alumni";
 import Analytics from "./pages/Analytics";
 import DataCollection from "./pages/DataCollection";
+import Documentation from "./pages/Documentation";
 import { api } from "./utils/api";
 
 const theme = createTheme({
@@ -32,7 +34,6 @@ const theme = createTheme({
 function App() {
   const [user, setUser] = useState(null);
   const [token, setToken] = useState(null);
-  const [currentPage, setCurrentPage] = useState("dashboard");
 
   useEffect(() => {
     // Check for stored token on app load
@@ -62,29 +63,18 @@ function App() {
     localStorage.removeItem("token");
     setUser(null);
     setToken(null);
-    setCurrentPage("dashboard");
-  };
-
-  const renderPage = () => {
-    switch (currentPage) {
-      case "dashboard":
-        return <Dashboard token={token} />;
-      case "alumni":
-        return <Alumni token={token} />;
-      case "analytics":
-        return <Analytics token={token} />;
-      case "collection":
-        return <DataCollection token={token} />;
-      default:
-        return <Dashboard token={token} />;
-    }
   };
 
   if (!user) {
     return (
       <ThemeProvider theme={theme}>
         <CssBaseline />
-        <Login onLogin={handleLogin} />
+        <Router>
+          <Routes>
+            <Route path="/login" element={<Login onLogin={handleLogin} />} />
+            <Route path="*" element={<Navigate to="/login" replace />} />
+          </Routes>
+        </Router>
       </ThemeProvider>
     );
   }
@@ -92,14 +82,20 @@ function App() {
   return (
     <ThemeProvider theme={theme}>
       <CssBaseline />
-      <Layout
-        currentPage={currentPage}
-        onPageChange={setCurrentPage}
-        user={user}
-        onLogout={handleLogout}
-      >
-        {renderPage()}
-      </Layout>
+      <Router>
+        <Layout user={user} onLogout={handleLogout}>
+          <Routes>
+            <Route path="/dashboard" element={<Dashboard token={token} />} />
+            <Route path="/alumni" element={<Alumni token={token} />} />
+            <Route path="/analytics" element={<Analytics token={token} />} />
+            <Route path="/data-collection" element={<DataCollection token={token} />} />
+            <Route path="/docs" element={<Documentation />} />
+            <Route path="/" element={<Navigate to="/dashboard" replace />} />
+            <Route path="/login" element={<Navigate to="/dashboard" replace />} />
+            <Route path="*" element={<Navigate to="/dashboard" replace />} />
+          </Routes>
+        </Layout>
+      </Router>
     </ThemeProvider>
   );
 }
